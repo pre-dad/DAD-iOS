@@ -29,6 +29,8 @@ final class WireSignupTests: XCTestCase {
     func testSignupAcceptsAnyOlderServer2xxReply() async throws {
         let transport = ScriptedTransport { _, _ in (.accepted, #"{"message":"Check your email"}"#) }
         try await WireCredentialAuth(origin: testOrigin, transport: transport).requestSignup(form)
+        XCTAssertEqual(transport.seen.count, 1)
+        XCTAssertEqual(transport.seen.first?.request.path, "/donor/signup")
     }
 
     func testSignupStatusMapping() async {

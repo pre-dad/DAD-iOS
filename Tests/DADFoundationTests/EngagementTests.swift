@@ -273,13 +273,13 @@ final class ScanModelTests: XCTestCase {
     func testScanningNonInviteFails() {
         let model = ScanModel()
         model.ingest("https://example.com/not-us")
-        XCTAssertEqual(model.phase, .failed("That QR code isn't a Dollar A Day invite."))
+        XCTAssertEqual(model.phase, .failed("That QR code isn’t a Dollar A Day invite."))
     }
 
     func testEmptyScanFails() {
         let model = ScanModel()
         model.ingest("   ")
-        XCTAssertEqual(model.phase, .failed("That didn't scan. Try again."))
+        XCTAssertEqual(model.phase, .failed("That didn’t scan. Try again."))
     }
 
     func testResetReturnsToScanning() {
