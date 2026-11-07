@@ -6,11 +6,21 @@ import UserNotifications
 
 /// Preview/UITest launch switches exist only in DEBUG builds: a release binary ignores them, so a
 /// shipped app can never be steered into synthetic data or a canned screen by launch arguments.
-private func launchFlag(_ name: String) -> Bool {
+func launchFlag(_ name: String) -> Bool {
     #if DEBUG
     ProcessInfo.processInfo.arguments.contains(name)
     #else
     false
+    #endif
+}
+
+/// The value of a `--name=value` launch argument, DEBUG only.
+func launchValue(_ name: String) -> String? {
+    #if DEBUG
+    let prefix = name + "="
+    return ProcessInfo.processInfo.arguments.first { $0.hasPrefix(prefix) }.map { String($0.dropFirst(prefix.count)) }
+    #else
+    nil
     #endif
 }
 

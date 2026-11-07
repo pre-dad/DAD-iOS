@@ -1,8 +1,7 @@
 import SwiftUI
 import DADFoundation
 
-// Account & settings screen, extracted from DADApp.swift (Phase G) so the insetGrouped Form
-// redesign never edits that hand-structured file. The sub-sections it composes
+// Account & settings screen, kept out of DADApp.swift, which is hand-structured. The sub-sections it composes
 // (ProfileDetailsSection, EmailChangeSection, EmployerSection, SessionsSection,
 // NotificationPermissionRow) live in App/AccountScreens.swift / App/SignInScreens.swift.
 
@@ -25,7 +24,7 @@ struct AccountSettingsScreen: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Settings").font(.largeTitle.bold()).accessibilityAddTraits(.isHeader)
             if model.signedOut {
-                Text("You're signed out.").accessibilityIdentifier("settings-signed-out")
+                Text("You’re signed out.").accessibilityIdentifier("settings-signed-out")
             } else {
                 switch model.phase {
                 case .loading:

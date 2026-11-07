@@ -16,6 +16,16 @@ private struct EngagementBackground: ViewModifier {
     }
 }
 
+/// A QR code drawn locally with CoreImage, scaled by `scale` so it stays sharp when shown with `.interpolation(.none)`.
+func qrCodeImage(_ text: String, scale: CGFloat) -> UIImage? {
+    let filter = CIFilter.qrCodeGenerator()
+    filter.message = Data(text.utf8)
+    filter.correctionLevel = "M"
+    guard let output = filter.outputImage?.transformed(by: CGAffineTransform(scaleX: scale, y: scale)),
+          let cgImage = CIContext().createCGImage(output, from: output.extent) else { return nil }
+    return UIImage(cgImage: cgImage)
+}
+
 /// The unavailable-section line: one wording everywhere so a missing figure is never mistaken for none.
 private func unavailableLine(_ what: String) -> some View {
     Text("\(what) can’t be shown right now.").font(.footnote).foregroundStyle(.secondary)
@@ -30,7 +40,7 @@ struct EngagementHome: View {
     @Environment(AnalyticsController.self) private var analytics: AnalyticsController?
     @State private var copied = false
     @State private var nameDraft = ""
-    /// Phase F: toggled when an invite is shared/copied, driving the success haptic.
+    /// Toggled when an invite is shared/copied, driving the success haptic.
     @State private var inviteShared = false
 
     var body: some View {
@@ -106,7 +116,7 @@ struct EngagementHome: View {
                     Text("You have invite-only event access.").font(.footnote).foregroundStyle(.secondary)
                         .accessibilityIdentifier("badge-invite-access")
                 }
-                // Phase G: a grid of SF Symbols. Earned/unearned differ by SHAPE + LABEL (not colour
+                // A grid of SF Symbols. Earned/unearned differ by SHAPE + LABEL (not colour
                 // alone): earned shows a filled seal and "Earned"; unearned a lock and "Locked".
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12, alignment: .top)], alignment: .leading, spacing: 12) {
                     ForEach(collection.badges) { badge in
@@ -206,7 +216,7 @@ struct EngagementHome: View {
 
     // MARK: invite link + IRL code (R-1..R-4)
 
-    /// Phase G: a preview of what someone opening this donor's invite sees — the framing invitees get.
+    /// A preview of what someone opening this donor's invite sees — the framing invitees get.
     @ViewBuilder private func invitePreview() -> some View {
         DADCard {
             VStack(alignment: .leading, spacing: 8) {
@@ -297,8 +307,6 @@ struct EngagementHome: View {
     }
 }
 
-/// The full-screen IRL code (R-1, R-2): a QR of the in-person link, drawn locally with CoreImage so no image
-/// is fetched and no untrusted file is parsed. Meant to be scanned from a phone screen face to face.
 /// "Add to Apple Wallet" for the referral code, shown only when the deployment issues passes. The
 /// bytes go to Wallet's own add sheet; ones Wallet cannot read are reported, not silently dropped.
 private struct WalletPassButton: View {
@@ -340,6 +348,8 @@ private struct AddPassSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: UIViewController, context: Context) {}
 }
 
+/// The full-screen IRL code (R-1, R-2): a QR of the in-person link, drawn locally with CoreImage so no image
+/// is fetched and no untrusted file is parsed. Meant to be scanned from a phone screen face to face.
 private struct InviteQRSheet: View {
     let url: URL
     let onClose: () -> Void
@@ -348,7 +358,7 @@ private struct InviteQRSheet: View {
         NavigationStack {
             VStack(spacing: 20) {
                 Text("Show this code").font(.title.bold()).accessibilityAddTraits(.isHeader)
-                if let image = Self.qr(url.absoluteString) {
+                if let image = qrCodeImage(url.absoluteString, scale: 10) {
                     Image(uiImage: image).interpolation(.none).resizable().scaledToFit()
                         .frame(maxWidth: 320).padding(16).background(Color.white, in: RoundedRectangle(cornerRadius: 12))
                         .accessibilityLabel("QR code for your invite link").accessibilityIdentifier("qr-code")
@@ -366,15 +376,6 @@ private struct InviteQRSheet: View {
                 }
             }
         }
-    }
-
-    private static func qr(_ text: String) -> UIImage? {
-        let filter = CIFilter.qrCodeGenerator()
-        filter.message = Data(text.utf8)
-        filter.correctionLevel = "M"
-        guard let output = filter.outputImage?.transformed(by: CGAffineTransform(scaleX: 10, y: 10)),
-              let cgImage = CIContext().createCGImage(output, from: output.extent) else { return nil }
-        return UIImage(cgImage: cgImage)
     }
 }
 

@@ -20,23 +20,19 @@ struct DonorShell: View {
     @State private var selectedTab: DonorTab
     @State private var givingPath: [GiftRoute] = []
     @State private var showSettings = false
-    /// The analytics question is asked once, after first sign-in (Phase D moved it off Welcome). Shown
+    /// The analytics question is asked once, after first sign-in. Shown
     /// the first time the signed-in shell appears while the choice is still unset.
     @State private var showAnalyticsChoice = false
+    @ScaledMetric(relativeTo: .subheadline) private var avatarSize: CGFloat = 30
 
     init(model: AccountModel, destination: Binding<AccountDestination?>) {
         self.model = model
         _destination = destination
         // DEBUG screenshot/UITest aids: open straight onto a tab (replaces the old auto-opened sheets).
-        #if DEBUG
-        let args = ProcessInfo.processInfo.arguments
-        let initial: DonorTab = args.contains("--stub-open-engagement") ? .circle
-            : args.contains("--stub-open-events") ? .events
-            : args.contains("--stub-open-gift") ? .giving : .home
+        let initial: DonorTab = launchFlag("--stub-open-engagement") ? .circle
+            : launchFlag("--stub-open-events") ? .events
+            : launchFlag("--stub-open-gift") ? .giving : .home
         _selectedTab = State(initialValue: initial)
-        #else
-        _selectedTab = State(initialValue: .home)
-        #endif
     }
 
     /// The avatar's initial comes from the public name once the profile is read; a person glyph stands in
@@ -95,7 +91,7 @@ struct DonorShell: View {
             }
         }
         .task {
-            // Ask the analytics question once, right after first sign-in (Phase D). The controller
+            // Ask the analytics question once, right after first sign-in. The controller
             // persists the answer, so a later launch with a stored choice never re-presents it.
             if let analytics = model.analytics, analytics.choice == nil { showAnalyticsChoice = true }
         }
@@ -113,7 +109,7 @@ struct DonorShell: View {
         ToolbarItem(placement: .topBarTrailing) {
             Button { showSettings = true } label: {
                 Text(avatarInitial).font(.subheadline.weight(.semibold))
-                    .frame(width: 30, height: 30)
+                    .frame(width: avatarSize, height: avatarSize)
                     .background(tokenColor("brand").opacity(0.18), in: Circle())
                     .overlay(Circle().strokeBorder(tokenColor("brand-ink").opacity(0.4)))
             }
@@ -237,7 +233,7 @@ struct DonorShell: View {
 
 /// Settings presented from the donor shell: sign-out and deletion run against the real session, and
 /// leaving the signed-in state dismisses the sheet so the root can route to sign-in. "Done" lives in a
-/// cancellation-action toolbar item (Phase B) rather than an inline button.
+/// cancellation-action toolbar item rather than an inline button.
 struct SettingsSheet: View {
     let service: any AccountSettingsService
     let passwords: (any PasswordSettingsService)?
