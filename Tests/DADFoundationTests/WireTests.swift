@@ -163,3 +163,59 @@ final class LenientDateTranscoderTests: XCTestCase {
         XCTAssertEqual(try LenientDateTranscoder().decode(text).timeIntervalSince1970, 1_794_063_600)
     }
 }
+
+final class WireAPIStatusMappingTests: XCTestCase {
+    private typealias Call = @Sendable (WireAPI) async throws -> Void
+    private let operations: [(name: String, path: String, call: Call)] = [
+        ("profile", "/donor/me/profile", { _ = try await $0.profile(access: "A") }),
+        ("refresh", "/donor/refresh", { _ = try await $0.refresh(token: "R") }),
+        ("claim", "/donor/claim", { _ = try await $0.claim(token: String(repeating: "a", count: 32)) }),
+        ("logout", "/donor/logout", { try await $0.logout(access: "A") }),
+    ]
+
+    func testEveryAccountCallMapsEveryStatusAndNeverInventsASession() async {
+        let statuses: [(HTTPResponse.Status, String)] = [(.unauthorized, "{}"), (.forbidden, "{}"), (.notFound, "{}"), (.unprocessableContent, "{}"),
+                                                         (.tooManyRequests, ""), (.tooManyRequests, "{}"), (.internalServerError, "{}"),
+                                                         (.serviceUnavailable, "{}")]
+        for operation in operations {
+            for (status, body) in statuses {
+                let transport = ScriptedTransport { _, _ in (status, body) }
+                let api = WireAPI(origin: testOrigin, transport: transport)
+                let expected: AccountError = status == .unauthorized && operation.name != "logout" ? .signedOut : .unavailable
+                do { try await operation.call(api); XCTFail("\(operation.name) \(status) did not throw") }
+                catch { XCTAssertEqual(error as? AccountError, expected, "\(operation.name) \(status) body=\(body.debugDescription)") }
+                XCTAssertEqual(transport.calls(to: operation.path).count, 1, "\(operation.name) is never retried by the transport layer")
+            }
+        }
+    }
+
+    func testRefreshAndClaimSendNoBearerAndOnlyTheirOwnSecretInTheBody() async throws {
+        let transport = ScriptedTransport { _, _ in (.ok, nativeSessionJSON) }
+        let api = WireAPI(origin: testOrigin, transport: transport)
+        let refreshed = try await api.refresh(token: "REFRESH-SECRET")
+        let claimed = try await api.claim(token: String(repeating: "c", count: 32))
+        XCTAssertEqual(refreshed.access, "A1")
+        XCTAssertEqual(claimed.refresh, "R1")
+        let (refresh, claim) = (transport.seen[0], transport.seen[1])
+        XCTAssertNil(refresh.request.headerFields[.authorization])
+        XCTAssertNil(claim.request.headerFields[.authorization])
+        let refreshBody = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(refresh.body.utf8)) as? [String: String])
+        XCTAssertEqual(refreshBody, ["refresh_token": "REFRESH-SECRET"])
+        let claimBody = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(claim.body.utf8)) as? [String: String])
+        XCTAssertEqual(claimBody, ["token": String(repeating: "c", count: 32), "platform": "IOS"])
+    }
+
+    func testLogoutSendsTheGivenBearerOnly() async throws {
+        let transport = ScriptedTransport { _, _ in (.ok, #"{"signed_out":true}"#) }
+        try await WireAPI(origin: testOrigin, transport: transport).logout(access: "REVOKE-ME")
+        XCTAssertEqual(transport.seen.first?.request.headerFields[.authorization], "Bearer REVOKE-ME")
+        XCTAssertEqual(transport.seen.first?.request.method, .post)
+    }
+
+    func testCredentialsExpireAccordingToTheServersLifetime() async throws {
+        let transport = ScriptedTransport { _, _ in (.ok, nativeSessionJSON) }
+        let before = Date()
+        let credentials = try await WireAPI(origin: testOrigin, transport: transport).refresh(token: "R")
+        XCTAssertEqual(credentials.expiresAt.timeIntervalSince(before), 900, accuracy: 5)
+    }
+}
