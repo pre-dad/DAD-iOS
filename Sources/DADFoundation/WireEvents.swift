@@ -35,7 +35,6 @@ public struct WireEvents: EventsService {
             case .tooManyRequests: throw AccountError.rateLimited
             case .serviceUnavailable: throw AccountError.unavailable
             case .undocumented(let status, _): throw AccountError.forStatus(status)
-            default: throw AccountError.unavailable
             }
         }
         let gated = try await product.call { client in
@@ -45,7 +44,6 @@ public struct WireEvents: EventsService {
             case .tooManyRequests: throw AccountError.rateLimited
             case .serviceUnavailable: throw AccountError.unavailable
             case .undocumented(let status, _): throw AccountError.forStatus(status)
-            default: throw AccountError.unavailable
             }
         }
         // The same event may appear in both reads; keep one, then soonest-first (E-2).
@@ -64,7 +62,6 @@ public struct WireEvents: EventsService {
             case .tooManyRequests: throw AccountError.rateLimited
             case .serviceUnavailable: throw AccountError.unavailable
             case .undocumented(let status, _): throw AccountError.forStatus(status)
-            default: throw AccountError.unavailable
             }
         }
     }
@@ -87,7 +84,6 @@ public struct WireEvents: EventsService {
             case .tooManyRequests: throw AccountError.rateLimited
             case .serviceUnavailable: throw AccountError.unavailable
             case .undocumented(let status, _): throw AccountError.forStatus(status)
-            default: throw AccountError.unavailable
             }
         }
     }
@@ -106,7 +102,6 @@ public struct WireEvents: EventsService {
             case .tooManyRequests: throw AccountError.rateLimited
             case .serviceUnavailable: throw AccountError.unavailable
             case .undocumented(let status, _): throw AccountError.forStatus(status)
-            default: throw AccountError.unavailable
             }
         }
     }
@@ -144,7 +139,6 @@ public struct WireEvents: EventsService {
             case .tooManyRequests: throw AccountError.rateLimited
             case .serviceUnavailable: throw AccountError.unavailable
             case .undocumented(let status, _): throw AccountError.forStatus(status)
-            default: throw AccountError.unavailable
             }
         }
     }

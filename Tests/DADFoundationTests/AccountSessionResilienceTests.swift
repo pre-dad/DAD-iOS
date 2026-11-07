@@ -256,3 +256,35 @@ final class WireRefreshFailureModeTests: XCTestCase {
         XCTAssertEqual(try store.load()?.refresh, "ref")
     }
 }
+
+private final class CorruptStore: CredentialStore, @unchecked Sendable {
+    private let lock = NSLock()
+    private(set) var corrupt = true
+    func load() throws -> Credentials? {
+        if lock.withLock({ corrupt }) { throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "not credentials")) }
+        return nil
+    }
+    func save(_ credentials: Credentials) throws {}
+    func clear() throws { lock.withLock { corrupt = false } }
+}
+
+private struct KeychainUnavailable: CredentialStore {
+    func load() throws -> Credentials? { throw AccountError.secureStorage(-25308) }
+    func save(_ credentials: Credentials) throws {}
+    func clear() throws {}
+}
+
+final class CorruptStoredCredentialsTests: XCTestCase {
+    func testACorruptStoredItemIsClearedAndTheSessionStartsSignedOut() async throws {
+        let store = CorruptStore()
+        let session = try AccountSession(api: ControlledAPI(), store: store)
+        XCTAssertFalse(session.restoredCredentials)
+        let signedIn = await session.isSignedIn
+        XCTAssertFalse(signedIn)
+        XCTAssertFalse(store.corrupt, "the unreadable item is removed so the next launch starts clean")
+    }
+
+    func testAnUnavailableKeychainStillFailsTheSession() {
+        XCTAssertThrowsError(try AccountSession(api: ControlledAPI(), store: KeychainUnavailable()))
+    }
+}
