@@ -178,7 +178,7 @@ final class WireEventsTests: XCTestCase {
         let padding = String(repeating: "a", count: 1_100_000)
         for body in [#"{"events":[{"id":"x"}]}"#, "<html>", listJSON(eventJSON(zone: "")).replacingOccurrences(of: "\"time_zone\":\"\",", with: ""), #"{"events":[],"pad":""# + padding + #""}"#] {
             let rig = try make(ScriptedTransport { _, _ in (.ok, body) })
-            do { _ = try await rig.service.events(); XCTFail(String(body.prefix(40))) } catch {}
+            do { _ = try await rig.service.events(); XCTFail(String(body.prefix(40))) } catch { assertBodyRejected(error) }
         }
     }
 
@@ -262,7 +262,7 @@ final class WireEventsTests: XCTestCase {
     func testReserveMalformedOrCancelledResultIsNotASuccess() async throws {
         for json in [cancelledJSON, #"{"status":"SOON"}"#, "{}", "nope"] {
             let rig = try make(ScriptedTransport { _, _ in (.ok, json) })
-            do { _ = try await rig.service.reserve(eventID: eventA); XCTFail(json) } catch {}
+            do { _ = try await rig.service.reserve(eventID: eventA); XCTFail(json) } catch { assertBodyRejected(error) }
         }
     }
 
@@ -308,7 +308,7 @@ final class WireEventsTests: XCTestCase {
         XCTAssertEqual(call.request.path, "/donor/me/events/\(eventA)/cancel")
         for json in [reservedJSON, "{}", "nope"] {
             let wrong = try make(ScriptedTransport { _, _ in (.ok, json) })
-            do { try await wrong.service.cancel(eventID: eventA); XCTFail(json) } catch {}
+            do { try await wrong.service.cancel(eventID: eventA); XCTFail(json) } catch { assertBodyRejected(error) }
         }
     }
 
@@ -370,7 +370,7 @@ final class WireEventsTests: XCTestCase {
 
     func testCheckInMalformedBodyThrows() async throws {
         let rig = try make(ScriptedTransport { _, _ in (.ok, #"{"event_id":"x"}"#) })
-        do { _ = try await rig.service.checkIn(code: validCheckInToken); XCTFail() } catch {}
+        do { _ = try await rig.service.checkIn(code: validCheckInToken); XCTFail() } catch { assertBodyRejected(error) }
     }
 
     // MARK: calendar
@@ -394,7 +394,7 @@ final class WireEventsTests: XCTestCase {
     func testCalendarOversizeBodyIsRefused() async throws {
         let big = "BEGIN:VCALENDAR\r\n" + String(repeating: "X-PAD:1\r\n", count: 20_000)
         let rig = try make(ScriptedTransport { _, _ in (.ok, big) })
-        do { _ = try await rig.service.calendar(eventID: eventA); XCTFail() } catch {}
+        do { _ = try await rig.service.calendar(eventID: eventA); XCTFail() } catch { assertBodyRejected(error) }
     }
 
     func testCalendarRefusesAMalformedID() async throws {

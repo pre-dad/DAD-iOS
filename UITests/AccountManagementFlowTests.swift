@@ -15,18 +15,11 @@ import XCTest
         return app
     }
 
-    private func replace(_ field: XCUIElement, with text: String) {
-        XCTAssertTrue(field.waitForExistence(timeout: 10), "\(field)")
-        field.tap()
-        let current = field.value as? String ?? ""
-        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count) + text)
-    }
-
     func testContactDetailsSaveANormalizedPhone() {
         let app = openSettings()
         XCTAssertFalse(app.buttons["details-save"].waitForExistence(timeout: 10) && app.buttons["details-save"].isEnabled,
                        "nothing changed yet")
-        replace(app.textFields["details-phone"], with: "415555012")
+        app.textFields["details-phone"].replaceText(with: "415555012", in: app)
         XCTAssertTrue(app.staticTexts["details-phone-hint"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["details-save"].isEnabled)
         app.textFields["details-phone"].typeText("3")
@@ -39,26 +32,26 @@ import XCTest
     func testEmailChangeExplainsAConflictThenSends() {
         let app = openSettings()
         app.buttons["email-change-start"].tap()
-        replace(app.textFields["email-change-input"], with: "taken@example.org")
+        app.textFields["email-change-input"].replaceText(with: "taken@example.org", in: app)
         app.buttons["email-change-submit"].tap()
         XCTAssertTrue(app.staticTexts["email-change-error"].waitForExistence(timeout: 10))
-        replace(app.textFields["email-change-input"], with: "new@example.org")
+        app.textFields["email-change-input"].replaceText(with: "new@example.org", in: app)
         app.buttons["email-change-submit"].tap()
         XCTAssertTrue(app.staticTexts["email-change-sent"].waitForExistence(timeout: 10))
     }
 
     func testCompanyCodeLinksAnEmployerThenJoinsATeam() {
         let app = openSettings()
-        replace(app.textFields["employer-code"], with: "WRONG")
+        app.textFields["employer-code"].replaceText(with: "WRONG", in: app)
         app.buttons["employer-enroll"].tap()
         XCTAssertTrue(app.staticTexts["employer-error"].waitForExistence(timeout: 10))
-        replace(app.textFields["employer-code"], with: "ACME42")
+        app.textFields["employer-code"].replaceText(with: "ACME42", in: app)
         app.buttons["employer-enroll"].tap()
         XCTAssertTrue(app.staticTexts["employer-linked"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.staticTexts["employer-error"].exists)
         XCTAssertTrue(app.otherElements["leaderboard-55555555-5555-4555-8555-555555555555"].exists
                       || app.staticTexts["leaderboard-55555555-5555-4555-8555-555555555555"].exists)
-        replace(app.textFields["employer-team-name"], with: "Platform")
+        app.textFields["employer-team-name"].replaceText(with: "Platform", in: app)
         app.buttons["employer-join-team"].tap()
         XCTAssertTrue(app.staticTexts["employer-team"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.staticTexts["employer-team"].label, "Your team: Platform")

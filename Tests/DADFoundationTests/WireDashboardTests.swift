@@ -112,14 +112,14 @@ final class WireDashboardTests: XCTestCase {
     func testMalformedBodyIsAnErrorNotACrash() async throws {
         for body in ["not json", #"{"state":"ready"}"#, #"{"state":"mystery","mode":"test"}"#] {
             let rig = try make(ScriptedTransport { _, _ in (.ok, body) })
-            do { _ = try await rig.service.dashboard(); XCTFail(body) } catch {}
+            do { _ = try await rig.service.dashboard(); XCTFail(body) } catch { assertBodyRejected(error) }
         }
     }
 
     func testOversizeBodyIsRefused() async throws {
         let padding = String(repeating: "a", count: 1_100_000)
         let rig = try make(ScriptedTransport { _, _ in (.ok, #"{"state":"preparing","mode":"test","pad":""# + padding + #""}"#) })
-        do { _ = try await rig.service.dashboard(); XCTFail() } catch {}
+        do { _ = try await rig.service.dashboard(); XCTFail() } catch { assertBodyRejected(error) }
     }
 
     // MARK: 401 refresh race
@@ -273,7 +273,7 @@ final class WireDashboardTests: XCTestCase {
 
     func testGiftsMalformedBodyThrows() async throws {
         let rig = try make(ScriptedTransport { _, _ in (.ok, #"{"gifts":"nope"}"#) })
-        do { _ = try await rig.service.gifts(offset: 0); XCTFail() } catch {}
+        do { _ = try await rig.service.gifts(offset: 0); XCTFail() } catch { assertBodyRejected(error) }
     }
 
     // MARK: receipt + annual summary

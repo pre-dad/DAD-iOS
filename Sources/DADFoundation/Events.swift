@@ -6,7 +6,7 @@ import Foundation
 //
 // The server is always authoritative for reservation and check-in (capacity races, the
 // exact window). These rules are the *client-side* pre-checks that drive what the UI
-// offers and disables — mirroring Phase C/D's "pure core, seam for I/O" shape.
+// offers and disables.
 
 // MARK: - Reservation status (E-3, E-4)
 
@@ -217,13 +217,13 @@ public enum ReservationOutcome: Sendable, Equatable {
     }
 
     public var confirmationTitle: String {
-        self == .waitlisted ? "You're on the waitlist" : "You're going"
+        self == .waitlisted ? "You’re on the waitlist" : "You’re going"
     }
 
     public var confirmationDetail: String {
         self == .waitlisted
-            ? "We'll notify you if a spot opens up."
-            : "Your spot is confirmed. Add it to your calendar so you don't miss it."
+            ? "We’ll notify you if a spot opens up."
+            : "Your spot is confirmed. Add it to your calendar so you don’t miss it."
     }
 }
 

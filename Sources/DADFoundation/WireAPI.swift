@@ -104,7 +104,7 @@ public struct WireAPI: AccountAPI {
     }
     public func refresh(token: String) async throws -> Credentials {
         switch try await client().refresh(.init(body: .json(.init(refresh_token: token)))) {
-        case .ok(let response): return try credentials(response.body.json)
+        case .ok(let response): return try nativeCredentials(response.body.json)
         case .unauthorized: throw AccountError.signedOut
         default: throw AccountError.unavailable
         }
@@ -113,7 +113,7 @@ public struct WireAPI: AccountAPI {
         switch try await client().claim(.init(body: .json(.init(token: token, platform: .IOS)))) {
         case .ok(let response):
             guard case .NativeSession(let value) = try response.body.json else { throw AccountError.invalidResponse }
-            return try credentials(value)
+            return try nativeCredentials(value)
         case .unauthorized: throw AccountError.signedOut
         default: throw AccountError.unavailable
         }
@@ -121,5 +121,4 @@ public struct WireAPI: AccountAPI {
     public func logout(access: String) async throws {
         guard case .ok = try await client(access).logout(.init()) else { throw AccountError.unavailable }
     }
-    private func credentials(_ value: Components.Schemas.NativeSession) throws -> Credentials { try nativeCredentials(value) }
 }

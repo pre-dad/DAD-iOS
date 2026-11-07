@@ -170,8 +170,8 @@ final class ReservationOutcomeTests: XCTestCase {
     }
 
     func testConfirmationCopyDiffersByOutcome() {
-        XCTAssertEqual(ReservationOutcome.reserved.confirmationTitle, "You're going")
-        XCTAssertEqual(ReservationOutcome.waitlisted.confirmationTitle, "You're on the waitlist")
+        XCTAssertEqual(ReservationOutcome.reserved.confirmationTitle, "You’re going")
+        XCTAssertEqual(ReservationOutcome.waitlisted.confirmationTitle, "You’re on the waitlist")
         XCTAssertNotEqual(ReservationOutcome.reserved.confirmationDetail, ReservationOutcome.waitlisted.confirmationDetail)
     }
 }

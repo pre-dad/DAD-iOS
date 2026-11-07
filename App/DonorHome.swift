@@ -6,7 +6,6 @@ import DADFoundation
 // always carried in text as well as colour.
 
 /// "2025-01-02" -> "January 2, 2025"; anything unparseable is shown as sent rather than dropped.
-/// US long format (the brief's `April 22, 2027`) now that Phase C restyles this line.
 private func friendlyDate(_ value: String) -> String {
     let parser = DateFormatter()
     parser.locale = Locale(identifier: "en_US_POSIX")
@@ -90,7 +89,7 @@ struct DonorHomeView: View {
                     }.accessibilityElement(children: .contain).accessibilityIdentifier("dashboard-preparing")
                 case .ready(.ready(let dashboard)):
                     DashboardCards(dashboard: dashboard, onUpdatePayment: onSwitchToGiving)
-                    // The lone primary on Home: Circle owns the share/QR affordances (Phase G).
+                    // The lone primary on Home: Circle owns the share/QR affordances.
                     Button("Invite someone", action: onInvite)
                         .buttonStyle(DADButtonStyle(.primary)).accessibilityIdentifier("invite-someone")
                 }
@@ -110,7 +109,7 @@ struct DonorHomeView: View {
         .task { await giftModel?.load() }
         .refreshable { await model.load(); await giftModel?.load() }
         .onChange(of: model.signedOut) { _, signedOut in if signedOut { onSignedOut() } }
-        // Phase F: warning haptic when the streak is at risk (payment needs attention).
+        // Warning haptic when the streak is at risk (payment needs attention).
         .sensoryFeedback(.warning, trigger: streakAtRisk)
     }
 
@@ -135,7 +134,7 @@ struct DonorHomeView: View {
 /// gift screen, so a cancel or change shows here the moment it succeeds.
 private struct GiftSummaryCard: View {
     let model: GivingModel
-    /// Tapping the row switches to the Giving tab (Phase C step 7).
+    /// Tapping the row switches to the Giving tab.
     var onOpen: () -> Void = {}
 
     var body: some View {
@@ -145,7 +144,7 @@ private struct GiftSummaryCard: View {
                     HStack {
                         Text("Your monthly gift").font(.headline).accessibilityAddTraits(.isHeader)
                         Spacer(minLength: 0)
-                        Image(systemName: "chevron.right").font(.footnote).foregroundStyle(.secondary)
+                        Image(systemName: "chevron.right").font(.footnote).foregroundStyle(.secondary).accessibilityHidden(true)
                     }
                     // Equal-weight framing when a gift exists (G-7..G-9); the server detail line keeps
                     // the `gift-summary` id/text UITests assert.
@@ -185,7 +184,7 @@ private struct DashboardCards: View {
     /// At-risk "Update payment" switches to the Giving tab.
     var onUpdatePayment: () -> Void = {}
     @ScaledMetric(relativeTo: .largeTitle) private var streakSize: CGFloat = 44
-    /// Phase F: the milestone last acknowledged on this device, so a newly crossed milestone shows the
+    /// The milestone last acknowledged on this device, so a newly crossed milestone shows the
     /// inline card once (NOT a modal) and fires the success haptic only on first sight.
     @AppStorage("dad.lastSeenMilestone") private var lastSeenMilestone = 0
     @State private var milestoneDismissed = false
@@ -229,7 +228,7 @@ private struct DashboardCards: View {
                 Text(streak.graceEndsAt.map { "A renewal didn’t go through. Update your payment by \($0.formatted(date: .long, time: .omitted)) to keep your streak." }
                      ?? "A renewal didn’t go through. Update your payment to keep your streak.")
             } icon: {
-                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Color.dad("warn"))
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Color.dad("warn")).accessibilityHidden(true)
             }
             .font(.footnote).accessibilityIdentifier("streak-at-risk")
             Button("Update payment", action: onUpdatePayment)

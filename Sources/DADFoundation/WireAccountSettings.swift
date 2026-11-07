@@ -21,7 +21,7 @@ public struct WireAccountSettings: AccountSettingsService {
     }
 
     public func load() async throws -> AccountSettingsSnapshot {
-        let profile = try await product.perform { client in
+        try await product.perform { client in
             switch try await client.profile(.init()) {
             case .ok(let response): return try Self.snapshot(response.body.json)
             case .unauthorized: throw AccountError.signedOut
@@ -29,7 +29,6 @@ public struct WireAccountSettings: AccountSettingsService {
             default: throw AccountError.unavailable
             }
         }
-        return profile
     }
 
     public func savePreferences(_ p: AccountPreferences) async throws -> AccountSettingsSnapshot {

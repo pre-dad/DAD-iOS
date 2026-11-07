@@ -47,7 +47,7 @@ import XCTest
         XCTAssertTrue(app.buttons["Verify"].isEnabled)
     }
 
-    /// Phase D: methods without a wired transport are HIDDEN (not shown disabled); the available
+    /// Methods without a wired transport are HIDDEN (not shown disabled); the available
     /// phone method is present and enabled, and the honest "not in this build" note remains.
     func testUnwiredMethodsAreHidden() {
         let app = XCUIApplication()

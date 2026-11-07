@@ -1,4 +1,3 @@
-import CoreImage.CIFilterBuiltins
 import PhotosUI
 import SwiftUI
 import DADFoundation
@@ -458,22 +457,13 @@ private struct PartnerCompanyCode: View {
             Text("Company code").font(.title3.bold()).accessibilityAddTraits(.isHeader)
             Text(code).font(.title2.monospaced().bold()).accessibilityIdentifier("partner-company-code")
             if let publicOrigin, let link = URL(string: "c/\(code)", relativeTo: publicOrigin)?.absoluteURL {
-                if let qr = Self.qr(link.absoluteString) {
+                if let qr = qrCodeImage(link.absoluteString, scale: 8) {
                     Image(uiImage: qr).interpolation(.none).resizable().frame(width: 160, height: 160)
                         .accessibilityLabel("QR code for \(link.absoluteString)").accessibilityIdentifier("partner-company-qr")
                 }
                 ShareLink("Share sign-up link", item: link).accessibilityIdentifier("partner-company-share")
             }
         }
-    }
-
-    private static func qr(_ text: String) -> UIImage? {
-        let filter = CIFilter.qrCodeGenerator()
-        filter.message = Data(text.utf8)
-        filter.correctionLevel = "M"
-        guard let output = filter.outputImage?.transformed(by: CGAffineTransform(scaleX: 8, y: 8)),
-              let image = CIContext().createCGImage(output, from: output.extent) else { return nil }
-        return UIImage(cgImage: image)
     }
 }
 

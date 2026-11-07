@@ -29,6 +29,8 @@ final class WireSignupTests: XCTestCase {
     func testSignupAcceptsAnyOlderServer2xxReply() async throws {
         let transport = ScriptedTransport { _, _ in (.accepted, #"{"message":"Check your email"}"#) }
         try await WireCredentialAuth(origin: testOrigin, transport: transport).requestSignup(form)
+        XCTAssertEqual(transport.seen.count, 1)
+        XCTAssertEqual(transport.seen.first?.request.path, "/donor/signup")
     }
 
     func testSignupStatusMapping() async {
@@ -130,7 +132,7 @@ final class WirePasswordSignInTests: XCTestCase {
     func testMalformedBodyIsAFailureNotASession() async {
         let transport = ScriptedTransport { _, _ in (.ok, "not json") }
         do { _ = try await WireCredentialAuth(origin: testOrigin, transport: transport).signIn(email: "a@b.co", password: "x"); XCTFail() }
-        catch { /* any thrown error is correct: no session was produced */ }
+        catch { assertBodyRejected(error) }
     }
 
     func testSignOutDuringPasswordSignInDiscardsTheLateResult() async throws {
@@ -158,7 +160,8 @@ final class WirePasswordSignInTests: XCTestCase {
         await gate.waitUntilEntered()
         signIn.cancel()
         await gate.release()
-        _ = try? await signIn.value
+        do { _ = try await signIn.value; XCTFail("a cancelled sign-in reported success") }
+        catch { XCTAssertTrue(error is CancellationError, "\(error)") }
         XCTAssertNil(try store.load(), "a cancelled sign-in must not persist credentials")
         XCTAssertEqual(store.saves, 0)
     }
