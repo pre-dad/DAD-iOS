@@ -42,7 +42,7 @@ private struct TestTransport: ClientTransport {
         do {
             _ = try await WireAPI(origin: URL(string: "https://api.test")!, transport: transport).profile(access: "synthetic-access")
             XCTFail("unbounded response accepted")
-        } catch { XCTAssertFalse(error is CancellationError) }
+        } catch { assertBodyRejected(error) }
     }
 
     func testMiddlewareStripsAmbientCredentialsAndAttachesOnlyTheProvidedBearer() async throws {

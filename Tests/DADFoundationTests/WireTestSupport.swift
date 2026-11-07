@@ -1,6 +1,7 @@
 import Foundation
 import HTTPTypes
 import OpenAPIRuntime
+import XCTest
 @testable import DADFoundation
 
 /// Records every request and answers from a per-call script, so a conformer's wire behaviour
@@ -60,4 +61,10 @@ final class WipeBox: @unchecked Sendable {
     private var hits = 0
     func hit() { lock.withLock { hits += 1 } }
     var count: Int { lock.withLock { hits } }
+}
+
+/// A 2xx body the client cannot accept (undecodable, wrong shape, over the 1 MiB bound) must surface as the
+/// runtime's `ClientError` or `invalidResponse`: never as a session end, a cancellation, or a throttle.
+func assertBodyRejected(_ error: Error, file: StaticString = #filePath, line: UInt = #line) {
+    XCTAssertTrue(error is ClientError || (error as? AccountError) == .invalidResponse, "\(error)", file: file, line: line)
 }
