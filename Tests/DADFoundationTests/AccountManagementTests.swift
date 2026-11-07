@@ -252,7 +252,7 @@ final class WireAccountManagementTests: XCTestCase {
 
     func testSignOutEverywhereClearsLocalOnlyAfterTheServerConfirms() async throws {
         let failing = try make(ScriptedTransport { _, _ in (.serviceUnavailable, "{}") })
-        do { try await failing.0.signOutEverywhere(); XCTFail() } catch {}
+        do { try await failing.0.signOutEverywhere(); XCTFail() } catch { XCTAssertEqual(error as? AccountError, .unavailable) }
         XCTAssertNotNil(try failing.2.load(), "a failed request must not pretend every device was signed out")
 
         let transport = ScriptedTransport { _, _ in (.ok, #"{"signed_out":true}"#) }

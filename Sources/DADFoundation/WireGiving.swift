@@ -49,19 +49,19 @@ public struct WireGiving: GivingService {
     }
 
     public func recurring() async throws -> RecurringState {
-        try await call { client in
+        try await product.call { client in
             switch try await client.recurring(.init()) {
             case .ok(let response): return Self.state(try response.body.json)
             case .unauthorized: throw AccountError.signedOut
             case .tooManyRequests: throw AccountError.rateLimited
-            case .undocumented(let status, _): throw Self.undocumented(status)
+            case .undocumented(let status, _): throw AccountError.forStatus(status)
             default: throw AccountError.unavailable
             }
         }
     }
 
     public func amountOffer() async throws -> AmountOffer? {
-        try await call { client in
+        try await product.call { client in
             switch try await client.amountOptions(.init()) {
             case .ok(let response):
                 switch try response.body.json {
@@ -77,7 +77,7 @@ public struct WireGiving: GivingService {
                 }
             case .unauthorized: throw AccountError.signedOut
             case .tooManyRequests: throw AccountError.rateLimited
-            case .undocumented(let status, _): throw Self.undocumented(status)
+            case .undocumented(let status, _): throw AccountError.forStatus(status)
             default: throw AccountError.unavailable
             }
         }
@@ -94,7 +94,7 @@ public struct WireGiving: GivingService {
             previous_minor: Int64(offer.nextAmountMinor), effective_at: offer.effectiveAt)
         let fingerprint = "amount:\(offer.subscriptionID):\(amountMinor):\(offer.nextAmountMinor):\(offer.effectiveAt.timeIntervalSince1970)"
         try await command(fingerprint) { key in
-            try await self.call { client in
+            try await self.product.call { client in
                 switch try await client.changeAmount(.init(headers: .init(Idempotency_hyphen_Key: key), body: .json(body))) {
                 case .ok: return
                 case .unauthorized: throw AccountError.signedOut
@@ -103,7 +103,7 @@ public struct WireGiving: GivingService {
                 case .unprocessableContent: throw AccountError.invalidInput
                 case .tooManyRequests: throw AccountError.rateLimited
                 case .serviceUnavailable(let response): throw Self.unavailable(response)
-                case .undocumented(let status, _): throw Self.undocumented(status)
+                case .undocumented(let status, _): throw AccountError.forStatus(status)
                 default: throw AccountError.unavailable
                 }
             }
@@ -116,7 +116,7 @@ public struct WireGiving: GivingService {
         let body = Operations.cancelRecurring.Input.Body.jsonPayload(subscription_id: subscriptionID, period_end: periodEnd)
         let fingerprint = "cancel:\(subscriptionID):\(periodEnd.timeIntervalSince1970)"
         return try await command(fingerprint) { key in
-            try await self.call { client in
+            try await self.product.call { client in
                 switch try await client.cancelRecurring(.init(headers: .init(Idempotency_hyphen_Key: key), body: .json(body))) {
                 case .ok(let response): return Self.state(try response.body.json)
                 case .unauthorized: throw AccountError.signedOut
@@ -125,7 +125,7 @@ public struct WireGiving: GivingService {
                 case .unprocessableContent: throw AccountError.invalidInput
                 case .tooManyRequests: throw AccountError.rateLimited
                 case .serviceUnavailable(let response): throw Self.unavailable(response)
-                case .undocumented(let status, _): throw Self.undocumented(status)
+                case .undocumented(let status, _): throw AccountError.forStatus(status)
                 default: throw AccountError.unavailable
                 }
             }
@@ -133,14 +133,14 @@ public struct WireGiving: GivingService {
     }
 
     public func paymentMethod() async throws -> PaymentMethodState {
-        try await call { client in
+        try await product.call { client in
             switch try await client.paymentMethod(.init()) {
             case .ok(let response):
                 let value = try response.body.json
                 return PaymentMethodState(kind: Self.kind(value.status.rawValue), completedAt: value.completed_at)
             case .unauthorized: throw AccountError.signedOut
             case .tooManyRequests: throw AccountError.rateLimited
-            case .undocumented(let status, _): throw Self.undocumented(status)
+            case .undocumented(let status, _): throw AccountError.forStatus(status)
             default: throw AccountError.unavailable
             }
         }
@@ -148,7 +148,7 @@ public struct WireGiving: GivingService {
 
     public func beginPayment() async throws -> PaymentPath {
         try await command("payment-setup") { key in
-            try await self.call { client in
+            try await self.product.call { client in
                 switch try await client.beginPaymentUpdate(.init(headers: .init(Idempotency_hyphen_Key: key))) {
                 case .ok(let response):
                     switch try response.body.json {
@@ -162,8 +162,7 @@ public struct WireGiving: GivingService {
                 case .unprocessableContent: throw AccountError.invalidInput
                 case .tooManyRequests: throw AccountError.rateLimited
                 case .serviceUnavailable(let response): throw Self.unavailable(response)
-                case .undocumented(let status, _): throw Self.undocumented(status)
-                default: throw AccountError.unavailable
+                case .undocumented(let status, _): throw AccountError.forStatus(status)
                 }
             }
         }
@@ -175,7 +174,7 @@ public struct WireGiving: GivingService {
         // the same session), a different choice is a different checkout.
         let referral = referral()
         return try await command("gift-checkout:\(amountMinor):\(referralFingerprint(referral))") { key in
-            try await self.call { client -> PaymentPath in
+            try await self.product.call { client -> PaymentPath in
                 let body = Operations.startRecurringCheckout.Input.Body.jsonPayload(amount_minor: Int64(amountMinor), referral_token: referral)
                 switch try await client.startRecurringCheckout(.init(headers: .init(Idempotency_hyphen_Key: key), body: .json(body))) {
                 case .created(let response): return .webCheckoutHandoff(try Self.hostedURL(try response.body.json.url))
@@ -185,7 +184,7 @@ public struct WireGiving: GivingService {
                 case .unprocessableContent: throw AccountError.invalidInput
                 case .tooManyRequests: throw AccountError.rateLimited
                 case .serviceUnavailable(let response): throw Self.unavailable(response)
-                case .undocumented(let status, _): throw Self.undocumented(status)
+                case .undocumented(let status, _): throw AccountError.forStatus(status)
                 default: throw AccountError.unavailable
                 }
             }
@@ -193,21 +192,6 @@ public struct WireGiving: GivingService {
     }
 
     // MARK: - helpers
-
-    /// `ProductClient.perform` plus one rule: a 4xx/5xx whose body is not the documented Problem JSON
-    /// (the ingress limiter's 429 has none) makes the generated client throw a decode error. The status
-    /// is still on the error, so map it exactly as a documented response would be.
-    private func call<T: Sendable>(_ operation: @Sendable (Client) async throws -> T) async throws -> T {
-        try await product.perform { client in
-            do { return try await operation(client) }
-            catch let error as ClientError {
-                if let status = error.response?.status.code, status >= 400, !error.underlyingError.isCancellation {
-                    throw Self.undocumented(status)
-                }
-                throw error
-            }
-        }
-    }
 
     private func command<T: Sendable>(_ fingerprint: String, _ run: (String) async throws -> T) async throws -> T {
         let key = ledger.key(for: fingerprint)
@@ -246,16 +230,5 @@ public struct WireGiving: GivingService {
         // A 503 with a `code` is a feature this deployment has not configured: do not retry.
         if let problem = try? response.body.json, problem.code != nil { return .paymentsUnavailable }
         return .unavailable
-    }
-
-    private static func undocumented(_ status: Int) -> AccountError {
-        switch status {
-        case 401: return .signedOut
-        case 403: return .forbidden
-        case 409: return .conflict
-        case 422: return .invalidInput
-        case 429: return .rateLimited
-        default: return .unavailable
-        }
     }
 }

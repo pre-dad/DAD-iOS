@@ -1,9 +1,9 @@
 import XCTest
 
-/// Phase E — the donor events home. Launches straight into the signed-in events screen (a
+/// The donor events home. Launches straight into the signed-in events screen (a
 /// dedicated preview arg that doesn't disturb the other donor tests) and exercises the list,
 /// an invite-only marker, a reserve → inline confirmation, and the inline cancel confirmation
-/// (no OS action sheet — deterministic under XCUITest, per the lesson from Phase C PR #4).
+/// (no OS action sheet, which keeps it deterministic under XCUITest).
 @MainActor final class EventsFlowTests: XCTestCase {
     func testEventsHomeRendersListAndInviteOnlyMarker() {
         let app = XCUIApplication()

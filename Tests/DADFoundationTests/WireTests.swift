@@ -42,7 +42,7 @@ private struct TestTransport: ClientTransport {
         do {
             _ = try await WireAPI(origin: URL(string: "https://api.test")!, transport: transport).profile(access: "synthetic-access")
             XCTFail("unbounded response accepted")
-        } catch { XCTAssertFalse(error is CancellationError) }
+        } catch { assertBodyRejected(error) }
     }
 
     func testMiddlewareStripsAmbientCredentialsAndAttachesOnlyTheProvidedBearer() async throws {
@@ -83,4 +83,139 @@ private final class SeenRequest: @unchecked Sendable {
     private var request: HTTPRequest?
     func set(_ value: HTTPRequest) { lock.withLock { request = value } }
     var value: HTTPRequest? { lock.withLock { request } }
+}
+
+@MainActor final class NativeHeadersBodyRulesTests: XCTestCase {
+    private func run(status: HTTPResponse.Status, contentType: String?, body: String?, maxBodyBytes: Int = 1_048_576,
+                     retryAfter: String? = nil) async throws -> (HTTPResponse, String?) {
+        var fields = HTTPFields()
+        if let contentType { fields[.contentType] = contentType }
+        if let retryAfter { fields[.retryAfter] = retryAfter }
+        let sent = fields
+        let (response, reply) = try await NativeHeaders(access: { nil }, maxBodyBytes: maxBodyBytes).intercept(
+            HTTPRequest(method: .get, scheme: "https", authority: "api.test", path: "/p"), body: nil,
+            baseURL: URL(string: "https://api.test")!, operationID: "t") { _, _, _ in
+            (HTTPResponse(status: status, headerFields: sent), body.map { HTTPBody($0) })
+        }
+        var text: String?
+        if let reply { text = try await String(collecting: reply, upTo: 1_048_576) }
+        return (response, text)
+    }
+
+    func testAThrottleWithoutAProblemBodyIsGivenTheDocumentedOneAndKeepsRetryAfter() async throws {
+        let undocumented: [(String?, String?)] = [(nil, nil), ("text/plain", "Too Many Requests"), ("application/json", "{}"),
+                                                  ("application/json", "[1]"), ("application/json", #"{"detail":5}"#),
+                                                  ("text/html", #"{"detail":"x"}"#), ("application/json", "not json")]
+        for (type, body) in undocumented {
+            let (response, text) = try await run(status: .tooManyRequests, contentType: type, body: body, retryAfter: "17")
+            XCTAssertEqual(response.headerFields[.contentType], "application/json", "\(String(describing: type)) \(String(describing: body))")
+            XCTAssertEqual(text, #"{"detail":"Too many requests"}"#)
+            XCTAssertEqual(response.headerFields[.retryAfter], "17", "the server's wait must reach the model untouched")
+        }
+    }
+
+    func testADocumentedThrottleBodyIsPassedThroughUnchanged() async throws {
+        let problem = #"{"detail":"Slow down","code":"RATE"}"#
+        let (response, text) = try await run(status: .tooManyRequests, contentType: "application/problem+json; charset=utf-8", body: problem)
+        XCTAssertEqual(text, problem)
+        XCTAssertEqual(response.headerFields[.contentType], "application/problem+json; charset=utf-8")
+    }
+
+    func testOnlyThrottlesAreRewrittenAndBodylessRepliesStayBodyless() async throws {
+        let (error, errorText) = try await run(status: .internalServerError, contentType: "text/plain", body: "boom")
+        XCTAssertEqual(errorText, "boom")
+        XCTAssertEqual(error.status, .internalServerError)
+        let (empty, emptyText) = try await run(status: .noContent, contentType: nil, body: nil)
+        XCTAssertNil(emptyText)
+        XCTAssertEqual(empty.status, .noContent)
+    }
+
+    func testTheBodyBoundIsInclusiveAndAppliesToEveryStatus() async throws {
+        let (_, atLimit) = try await run(status: .ok, contentType: "application/json", body: String(repeating: "x", count: 16), maxBodyBytes: 16)
+        XCTAssertEqual(atLimit?.count, 16)
+        for status in [HTTPResponse.Status.ok, .internalServerError, .tooManyRequests] {
+            do {
+                _ = try await run(status: status, contentType: "application/json", body: String(repeating: "x", count: 17), maxBodyBytes: 16)
+                XCTFail("\(status) body over the bound was accepted")
+            } catch { XCTAssertFalse(error.isCancellation, "\(status): \(error)") }
+        }
+    }
+}
+
+final class LenientDateTranscoderTests: XCTestCase {
+    func testWholeAndFractionalSecondsBothDecodeToTheSameInstant() throws {
+        let transcoder = LenientDateTranscoder()
+        let whole = try transcoder.decode("2026-11-07T15:00:00Z")
+        XCTAssertEqual(whole.timeIntervalSince1970, 1_794_063_600)
+        XCTAssertEqual(try transcoder.decode("2026-11-07T15:00:00.500Z").timeIntervalSince1970, 1_794_063_600.5, accuracy: 0.001)
+        XCTAssertEqual(try transcoder.decode("2026-11-07T10:00:00-05:00"), whole, "an offset names the same instant")
+    }
+
+    func testGarbageIsADecodingErrorNotADate() {
+        for text in ["", "yesterday", "2026-11-07", "2026-13-40T99:00:00Z", "1794063600"] {
+            XCTAssertThrowsError(try LenientDateTranscoder().decode(text), text) { XCTAssertTrue($0 is DecodingError, "\($0)") }
+        }
+    }
+
+    func testEncodingIsThePlainFormTheServerAccepts() throws {
+        let text = try LenientDateTranscoder().encode(Date(timeIntervalSince1970: 1_794_063_600.75))
+        XCTAssertEqual(text, "2026-11-07T15:00:00Z")
+        XCTAssertEqual(try LenientDateTranscoder().decode(text).timeIntervalSince1970, 1_794_063_600)
+    }
+}
+
+final class WireAPIStatusMappingTests: XCTestCase {
+    private typealias Call = @Sendable (WireAPI) async throws -> Void
+    private let operations: [(name: String, path: String, call: Call)] = [
+        ("profile", "/donor/me/profile", { _ = try await $0.profile(access: "A") }),
+        ("refresh", "/donor/refresh", { _ = try await $0.refresh(token: "R") }),
+        ("claim", "/donor/claim", { _ = try await $0.claim(token: String(repeating: "a", count: 32)) }),
+        ("logout", "/donor/logout", { try await $0.logout(access: "A") }),
+    ]
+
+    func testEveryAccountCallMapsEveryStatusAndNeverInventsASession() async {
+        let statuses: [(HTTPResponse.Status, String)] = [(.unauthorized, "{}"), (.forbidden, "{}"), (.notFound, "{}"), (.unprocessableContent, "{}"),
+                                                         (.tooManyRequests, ""), (.tooManyRequests, "{}"), (.internalServerError, "{}"),
+                                                         (.serviceUnavailable, "{}")]
+        for operation in operations {
+            for (status, body) in statuses {
+                let transport = ScriptedTransport { _, _ in (status, body) }
+                let api = WireAPI(origin: testOrigin, transport: transport)
+                let expected: AccountError = status == .unauthorized && operation.name != "logout" ? .signedOut : .unavailable
+                do { try await operation.call(api); XCTFail("\(operation.name) \(status) did not throw") }
+                catch { XCTAssertEqual(error as? AccountError, expected, "\(operation.name) \(status) body=\(body.debugDescription)") }
+                XCTAssertEqual(transport.calls(to: operation.path).count, 1, "\(operation.name) is never retried by the transport layer")
+            }
+        }
+    }
+
+    func testRefreshAndClaimSendNoBearerAndOnlyTheirOwnSecretInTheBody() async throws {
+        let transport = ScriptedTransport { _, _ in (.ok, nativeSessionJSON) }
+        let api = WireAPI(origin: testOrigin, transport: transport)
+        let refreshed = try await api.refresh(token: "REFRESH-SECRET")
+        let claimed = try await api.claim(token: String(repeating: "c", count: 32))
+        XCTAssertEqual(refreshed.access, "A1")
+        XCTAssertEqual(claimed.refresh, "R1")
+        let (refresh, claim) = (transport.seen[0], transport.seen[1])
+        XCTAssertNil(refresh.request.headerFields[.authorization])
+        XCTAssertNil(claim.request.headerFields[.authorization])
+        let refreshBody = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(refresh.body.utf8)) as? [String: String])
+        XCTAssertEqual(refreshBody, ["refresh_token": "REFRESH-SECRET"])
+        let claimBody = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(claim.body.utf8)) as? [String: String])
+        XCTAssertEqual(claimBody, ["token": String(repeating: "c", count: 32), "platform": "IOS"])
+    }
+
+    func testLogoutSendsTheGivenBearerOnly() async throws {
+        let transport = ScriptedTransport { _, _ in (.ok, #"{"signed_out":true}"#) }
+        try await WireAPI(origin: testOrigin, transport: transport).logout(access: "REVOKE-ME")
+        XCTAssertEqual(transport.seen.first?.request.headerFields[.authorization], "Bearer REVOKE-ME")
+        XCTAssertEqual(transport.seen.first?.request.method, .post)
+    }
+
+    func testCredentialsExpireAccordingToTheServersLifetime() async throws {
+        let transport = ScriptedTransport { _, _ in (.ok, nativeSessionJSON) }
+        let before = Date()
+        let credentials = try await WireAPI(origin: testOrigin, transport: transport).refresh(token: "R")
+        XCTAssertEqual(credentials.expiresAt.timeIntervalSince(before), 900, accuracy: 5)
+    }
 }

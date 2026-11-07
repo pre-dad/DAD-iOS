@@ -100,7 +100,7 @@ public struct PartnerOverview: Sendable, Equatable {
 
     /// The "Verified by DAD" assurance line with the figures' as-of date (§11 copy correction).
     /// When no figure has been verified yet, there is no date to stand behind, so returns nil.
-    public func verifiedLine(now: Date = Date(), calendar: Calendar = .current) -> String? {
+    public func verifiedLine() -> String? {
         guard let updatedAt else { return nil }
         let df = DateFormatter()
         df.locale = Locale(identifier: "en_US_POSIX")

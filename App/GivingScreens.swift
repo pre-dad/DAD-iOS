@@ -93,7 +93,7 @@ struct GiftScreen: View {
     var foundingProvider: (any DashboardService)? = nil
     @State private var confirmingCancel = false
     @ScaledMetric(relativeTo: .largeTitle) private var amountSize: CGFloat = 44
-    /// Phase F: show the one-time celebration after a FIRST gift is set up. Tracks that this screen
+    /// Show the one-time celebration after a FIRST gift is set up. Tracks that this screen
     /// started a gift (so a later amount-change never re-celebrates) and whether it's been shown.
     @State private var startedGift = false
     @State private var showCelebration = false
@@ -129,7 +129,7 @@ struct GiftScreen: View {
                 HostedPageSheet(handoff: handoff, stubComplete: stubComplete, onFinish: { Task { await model.handoffFinished() } })
             }
         }
-        // Phase F: success haptic the moment a gift is set up or saved; warning when payment needs
+        // Success haptic the moment a gift is set up or saved; warning when payment needs
         // attention. Triggers are published model state, so no number is animated.
         .sensoryFeedback(.success, trigger: model.recurring.subscriptionID)
         .sensoryFeedback(.warning, trigger: paymentNeedsAttention)
@@ -244,8 +244,7 @@ struct GiftScreen: View {
     }
 
     /// The $1 / $3 / $5 / Other amount picker. The three presets are a radio row (the selected option
-    /// carries `.isSelected` for VoiceOver); "Other" reveals the existing ± stepper for any $1–$30/day.
-    /// Replaces the former ± stepper + misused DADStreakBar (the streak bar is Home-only now).
+    /// carries `.isSelected` for VoiceOver); "Other" reveals a ± stepper for any $1–$30/day.
     @State private var otherExpanded = false
 
     private var amountCard: some View {
@@ -336,7 +335,7 @@ struct GiftScreen: View {
                         Button {
                             Task { await model.updatePayment() }
                         } label: {
-                            HStack { Text("Update payment method"); Spacer(minLength: 0); Image(systemName: "chevron.right").font(.footnote) }
+                            HStack { Text("Update payment method"); Spacer(minLength: 0); Image(systemName: "chevron.right").font(.footnote).accessibilityHidden(true) }
                         }
                         .buttonStyle(DADButtonStyle(.secondary)).disabled(model.isBusy).accessibilityIdentifier("update-payment")
                     }
@@ -344,7 +343,7 @@ struct GiftScreen: View {
             }.accessibilityElement(children: .contain).accessibilityIdentifier("payment-card")
             // Gift history is a push on the Giving tab's NavigationStack (registered in Shell.swift).
             NavigationLink(value: GiftRoute.history) {
-                HStack { Text("Gift history"); Spacer(minLength: 0); Image(systemName: "chevron.right").font(.footnote) }
+                HStack { Text("Gift history"); Spacer(minLength: 0); Image(systemName: "chevron.right").font(.footnote).accessibilityHidden(true) }
             }
             .buttonStyle(DADButtonStyle(.secondary)).accessibilityIdentifier("giving-history")
         }

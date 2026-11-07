@@ -5,7 +5,7 @@ import Foundation
 // protocols (`IDTokenProvider`, `PasskeyAuthenticator`) implemented in the App target with
 // AuthenticationServices; everything else here is platform-free and tested against stub transports.
 // Each method is switched on only by `SignInCapabilities`, which needs build-time configuration
-// the project does not ship with, so by default they render as "Not available yet".
+// the project does not ship with, so by default they are hidden from the sign-in screen.
 
 // MARK: - Capability gating
 
@@ -52,7 +52,7 @@ public struct SignInCapabilities: Sendable, Equatable {
         }
     }
 
-    /// True when any optional method is greyed out, so the screen can say so in plain text.
+    /// True when any optional method is hidden, so the screen can say so in plain text.
     public var hasUnavailableMethod: Bool { !(apple && google && passkey) }
 }
 

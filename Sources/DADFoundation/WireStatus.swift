@@ -19,18 +19,8 @@ extension AccountError {
 }
 
 extension ProductClient {
-    /// `perform` plus one rule: a 4xx/5xx whose body is not the documented Problem JSON (the ingress
-    /// limiter's 429 has none) makes the generated client throw a decode error. The status is still on
-    /// the error, so map it exactly as a documented response would be. Cancellation is never remapped.
+    /// `perform` plus `mappingUndecodableStatus`, for responses the generated client cannot decode.
     func call<T: Sendable>(_ operation: @Sendable (Client) async throws -> T) async throws -> T {
-        try await perform { client in
-            do { return try await operation(client) }
-            catch let error as ClientError {
-                if let status = error.response?.status.code, status >= 400, !error.underlyingError.isCancellation {
-                    throw AccountError.forStatus(status)
-                }
-                throw error
-            }
-        }
+        try await perform { client in try await mappingUndecodableStatus { try await operation(client) } }
     }
 }

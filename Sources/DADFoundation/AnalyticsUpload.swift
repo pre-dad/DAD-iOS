@@ -33,7 +33,7 @@ public final class MemoryAnalyticsConsent: AnalyticsConsent, @unchecked Sendable
 }
 
 /// The app's analytics: records nothing until the donor allows it, then buffers events in the recorder and uploads
-/// them in the background (a failed upload is retried with the next event). Declining drops anything still buffered.
+/// them in the background (a failed upload is retried with the next event once its backoff has passed). Declining drops anything still buffered.
 /// One journey id per launch groups a visit, like the website's per-tab journey.
 @MainActor
 @Observable
@@ -67,7 +67,7 @@ public final class AnalyticsController {
         let recorder = recorder
         Task {
             await recorder.record(record)
-            try? await recorder.flush()
+            try? await recorder.flushWhenDue()
         }
     }
 

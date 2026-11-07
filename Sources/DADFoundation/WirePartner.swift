@@ -153,15 +153,7 @@ public struct WirePartner: PartnerService {
         try await session.authorized { bearer in
             let client = Client(serverURL: origin, configuration: .init(dateTranscoder: LenientDateTranscoder()),
                                 transport: transport, middlewares: [NativeHeaders(access: { bearer }, maxBodyBytes: maxBodyBytes)])
-            do { return try await operation(client) }
-            catch let error as ClientError {
-                // A 4xx/5xx without the documented Problem body (the ingress limiter's 429 has none) fails the
-                // generated decode; the status is still on the error and maps like a documented response.
-                if let status = error.response?.status.code, status >= 400, !error.underlyingError.isCancellation {
-                    throw AccountError.forStatus(status)
-                }
-                throw error
-            }
+            return try await mappingUndecodableStatus { try await operation(client) }
         }
     }
 

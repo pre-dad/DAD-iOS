@@ -313,17 +313,12 @@ public enum PublicOrigin {
 
 // MARK: - QR (R-2)
 
-/// A square QR module matrix (true == dark module). Pure so the full-screen IRL QR and the
-/// encode/decode round-trip test need no CoreImage or rendering. This is a minimal, correct
-/// QR-adjacent payload carrier validated by a round trip, not a spec-complete ISO encoder;
-/// the shipped on-screen QR renders via CoreImage from `payload`, while this type lets the
-/// test assert the payload survives encode→decode.
+/// A scanned or shareable QR payload: the invite URL the on-screen QR encodes (rendered with CoreImage) and
+/// the parser that reads a scan back into a referral code.
 public struct QRPayload: Sendable, Equatable {
     public let payload: String
     public init(_ payload: String) { self.payload = payload }
 
-    /// Encode to a compact transport string. A real CIFilter QR encodes `payload` directly;
-    /// this round-trippable form lets the test prove no data is lost in the hand-off.
     public func encoded() -> String { payload }
 
     /// Decode a scanned string back to a payload, trimming surrounding whitespace a camera

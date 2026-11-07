@@ -1,6 +1,6 @@
 import XCTest
 
-/// Phase F — the partner portal. The preview args (admin / viewer) launch straight into the signed-in
+/// The partner portal. The preview args (admin / viewer) launch straight into the signed-in
 /// partner shell; the stub-backend journeys run the real partner conformers from the emailed link to
 /// sign-out. Covers verified-or-hidden Overview figures (§7.3), admin-vs-viewer capability gating (§7.2)
 /// and the organization tools (profile, users, reports).
@@ -41,8 +41,7 @@ import XCTest
         field.tap()
         field.typeText("not-an-email")
         XCTAssertFalse(invite.isEnabled)
-        field.typeText("@acme.com")
-        field.clearAndType("new@acme.com")
+        field.replaceText(with: "new@acme.com", in: app)
         XCTAssertTrue(invite.isEnabled)
 
         XCTAssertFalse(app.buttons["partner-remove-u1"].exists, "an admin cannot remove themselves")
@@ -93,8 +92,7 @@ import XCTest
         paste.typeText("https://stub.invalid/partner/accept#token=expired" + String(repeating: "x", count: 32))
         app.buttons["partner-paste-submit"].tap()
         XCTAssertTrue(app.staticTexts["partner-sign-in-error"].waitForExistence(timeout: 5), "a used link is explained")
-        paste.tap()
-        paste.clearAndType("https://stub.invalid/partner/accept#token=stubpartner" + String(repeating: "x", count: 32))
+        paste.replaceText(with: "https://stub.invalid/partner/accept#token=stubpartner" + String(repeating: "x", count: 32), in: app)
         app.buttons["partner-paste-submit"].tap()
 
         XCTAssertTrue(app.staticTexts["partner-committed"].waitForExistence(timeout: 10), "the portal opens on the real conformers")
@@ -118,8 +116,7 @@ import XCTest
 
         let name = app.textFields["partner-profile-name"]
         XCTAssertTrue(name.waitForExistence(timeout: 5))
-        name.tap()
-        name.clearAndType("Acme Water")
+        name.replaceText(with: "Acme Water", in: app)
         app.buttons["partner-profile-save"].tap()
         XCTAssertTrue(app.staticTexts["Acme Water"].waitForExistence(timeout: 5), "the header shows the saved name")
         XCTAssertTrue(app.staticTexts["partner-company-code"].exists)
@@ -134,7 +131,7 @@ import XCTest
         XCTAssertTrue(app.staticTexts["partner-action-error"].waitForExistence(timeout: 5), "an aged-out report says so")
     }
 
-    // MARK: - P6: the real partner conformers on the scripted backend
+    // MARK: - The real partner conformers on the scripted backend
 
     private func launchSignedInPartner(_ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
@@ -178,7 +175,7 @@ import XCTest
         email.typeText("not-an-email")
         XCTAssertFalse(invite.isEnabled, "an invalid address cannot be sent")
 
-        email.clearAndType("taken@acme.com")
+        email.replaceText(with: "taken@acme.com", in: app)
         XCTAssertTrue(invite.isEnabled)
         invite.tap()
         let error = app.staticTexts["partner-action-error"]
@@ -187,8 +184,7 @@ import XCTest
         XCTAssertTrue(error.label.contains("another role or organization"))
 
         reveal(email, in: app)
-        email.tap()
-        email.clearAndType("new@acme.com")
+        email.replaceText(with: "new@acme.com", in: app)
         reveal(invite, in: app)
         invite.tap()
         XCTAssertTrue(app.staticTexts["Nell · Viewer"].waitForExistence(timeout: 5), "the invited user appears in the refreshed list")
@@ -263,7 +259,7 @@ import XCTest
         XCTAssertFalse(app.otherElements["partner-application-status"].exists)
     }
 
-    // MARK: - Contract 2.11: applying from the app
+    // MARK: - Applying from the app
 
     private func openApplication(_ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
@@ -360,13 +356,5 @@ import XCTest
         signOut.tap()
         XCTAssertTrue(app.buttons["Partner organization? Sign in here"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["Organization"].exists)
-    }
-}
-
-private extension XCUIElement {
-    func clearAndType(_ text: String) {
-        guard let current = value as? String, !current.isEmpty else { typeText(text); return }
-        typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count))
-        typeText(text)
     }
 }

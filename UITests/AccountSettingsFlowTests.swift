@@ -1,7 +1,6 @@
 import XCTest
 
-/// Phase H (automatable slice) — the account & settings screen, the App-Store-mandated in-app
-/// account-deletion flow iOS was missing. Launches straight into the signed-in settings screen
+/// The account & settings screen, including the in-app account-deletion flow the App Store requires. Launches straight into the signed-in settings screen
 /// via a dedicated preview arg. Covers: renders profile + toggles, the delete-account confirm
 /// gate stays disabled until the exact word is typed (§6.12), and sign-out leaves the shell.
 @MainActor final class AccountSettingsFlowTests: XCTestCase {
