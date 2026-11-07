@@ -1,6 +1,6 @@
 import XCTest
 
-/// Wiring P3 — the REAL `WireGiving`, `GivingModel`, `WireAccountSettings` and `AccountSession` run
+/// The REAL `WireGiving`, `GivingModel`, `WireAccountSettings` and `AccountSession` run
 /// against the DEBUG-only scripted transport (`--stub-backend`). The Stripe-hosted pages cannot load
 /// from the simulator, so the app shows a stub "secure payment page" whose "Complete payment" button
 /// plays the webhook; everything else (reads, idempotent commands, the 409 rules) is release code.
