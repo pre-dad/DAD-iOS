@@ -84,3 +84,82 @@ private final class SeenRequest: @unchecked Sendable {
     func set(_ value: HTTPRequest) { lock.withLock { request = value } }
     var value: HTTPRequest? { lock.withLock { request } }
 }
+
+@MainActor final class NativeHeadersBodyRulesTests: XCTestCase {
+    private func run(status: HTTPResponse.Status, contentType: String?, body: String?, maxBodyBytes: Int = 1_048_576,
+                     retryAfter: String? = nil) async throws -> (HTTPResponse, String?) {
+        var fields = HTTPFields()
+        if let contentType { fields[.contentType] = contentType }
+        if let retryAfter { fields[.retryAfter] = retryAfter }
+        let sent = fields
+        let (response, reply) = try await NativeHeaders(access: { nil }, maxBodyBytes: maxBodyBytes).intercept(
+            HTTPRequest(method: .get, scheme: "https", authority: "api.test", path: "/p"), body: nil,
+            baseURL: URL(string: "https://api.test")!, operationID: "t") { _, _, _ in
+            (HTTPResponse(status: status, headerFields: sent), body.map { HTTPBody($0) })
+        }
+        var text: String?
+        if let reply { text = try await String(collecting: reply, upTo: 1_048_576) }
+        return (response, text)
+    }
+
+    func testAThrottleWithoutAProblemBodyIsGivenTheDocumentedOneAndKeepsRetryAfter() async throws {
+        let undocumented: [(String?, String?)] = [(nil, nil), ("text/plain", "Too Many Requests"), ("application/json", "{}"),
+                                                  ("application/json", "[1]"), ("application/json", #"{"detail":5}"#),
+                                                  ("text/html", #"{"detail":"x"}"#), ("application/json", "not json")]
+        for (type, body) in undocumented {
+            let (response, text) = try await run(status: .tooManyRequests, contentType: type, body: body, retryAfter: "17")
+            XCTAssertEqual(response.headerFields[.contentType], "application/json", "\(String(describing: type)) \(String(describing: body))")
+            XCTAssertEqual(text, #"{"detail":"Too many requests"}"#)
+            XCTAssertEqual(response.headerFields[.retryAfter], "17", "the server's wait must reach the model untouched")
+        }
+    }
+
+    func testADocumentedThrottleBodyIsPassedThroughUnchanged() async throws {
+        let problem = #"{"detail":"Slow down","code":"RATE"}"#
+        let (response, text) = try await run(status: .tooManyRequests, contentType: "application/problem+json; charset=utf-8", body: problem)
+        XCTAssertEqual(text, problem)
+        XCTAssertEqual(response.headerFields[.contentType], "application/problem+json; charset=utf-8")
+    }
+
+    func testOnlyThrottlesAreRewrittenAndBodylessRepliesStayBodyless() async throws {
+        let (error, errorText) = try await run(status: .internalServerError, contentType: "text/plain", body: "boom")
+        XCTAssertEqual(errorText, "boom")
+        XCTAssertEqual(error.status, .internalServerError)
+        let (empty, emptyText) = try await run(status: .noContent, contentType: nil, body: nil)
+        XCTAssertNil(emptyText)
+        XCTAssertEqual(empty.status, .noContent)
+    }
+
+    func testTheBodyBoundIsInclusiveAndAppliesToEveryStatus() async throws {
+        let (_, atLimit) = try await run(status: .ok, contentType: "application/json", body: String(repeating: "x", count: 16), maxBodyBytes: 16)
+        XCTAssertEqual(atLimit?.count, 16)
+        for status in [HTTPResponse.Status.ok, .internalServerError, .tooManyRequests] {
+            do {
+                _ = try await run(status: status, contentType: "application/json", body: String(repeating: "x", count: 17), maxBodyBytes: 16)
+                XCTFail("\(status) body over the bound was accepted")
+            } catch { XCTAssertFalse(error.isCancellation, "\(status): \(error)") }
+        }
+    }
+}
+
+final class LenientDateTranscoderTests: XCTestCase {
+    func testWholeAndFractionalSecondsBothDecodeToTheSameInstant() throws {
+        let transcoder = LenientDateTranscoder()
+        let whole = try transcoder.decode("2026-11-07T15:00:00Z")
+        XCTAssertEqual(whole.timeIntervalSince1970, 1_794_063_600)
+        XCTAssertEqual(try transcoder.decode("2026-11-07T15:00:00.500Z").timeIntervalSince1970, 1_794_063_600.5, accuracy: 0.001)
+        XCTAssertEqual(try transcoder.decode("2026-11-07T10:00:00-05:00"), whole, "an offset names the same instant")
+    }
+
+    func testGarbageIsADecodingErrorNotADate() {
+        for text in ["", "yesterday", "2026-11-07", "2026-13-40T99:00:00Z", "1794063600"] {
+            XCTAssertThrowsError(try LenientDateTranscoder().decode(text), text) { XCTAssertTrue($0 is DecodingError, "\($0)") }
+        }
+    }
+
+    func testEncodingIsThePlainFormTheServerAccepts() throws {
+        let text = try LenientDateTranscoder().encode(Date(timeIntervalSince1970: 1_794_063_600.75))
+        XCTAssertEqual(text, "2026-11-07T15:00:00Z")
+        XCTAssertEqual(try LenientDateTranscoder().decode(text).timeIntervalSince1970, 1_794_063_600)
+    }
+}
