@@ -1,6 +1,6 @@
 import XCTest
 
-/// Phase D — the donor engagement home. Launches straight into the signed-in engagement
+/// The donor engagement home. Launches straight into the signed-in engagement
 /// screen (a dedicated preview arg that doesn't disturb the other donor tests) and exercises
 /// impact, the badges summary, and the rankings opt-out toggle (which renders inline — no OS
 /// action sheet — so it is deterministic under XCUITest).

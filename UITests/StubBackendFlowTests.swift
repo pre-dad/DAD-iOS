@@ -5,7 +5,7 @@ import XCTest
 /// release code path is exercised in the simulator with no network.
 @MainActor final class StubBackendFlowTests: XCTestCase {
     private func signIn(_ app: XCUIApplication, code: String) {
-        // Phase D: Welcome's donor sign-in path is "I already give — sign in"; phone is "Continue with phone".
+        // Welcome's donor sign-in path is "I already give — sign in"; phone is "Continue with phone".
         XCTAssertTrue(app.buttons["I already give — sign in"].waitForExistence(timeout: 15))
         app.buttons["I already give — sign in"].tap()
         app.buttons["Continue with phone"].tap()
@@ -50,7 +50,7 @@ import XCTest
     }
 
     func testTheAnalyticsQuestionIsAskedOnceAndRemembered() {
-        // Phase D moved the analytics question off Welcome to a sheet shown once after first sign-in.
+        // The analytics question is a sheet shown once after first sign-in, not part of Welcome.
         let app = XCUIApplication()
         app.launchArguments = ["--stub-backend", "--stub-analytics-unset"]
         app.launch()
