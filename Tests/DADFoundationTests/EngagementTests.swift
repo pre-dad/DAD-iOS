@@ -248,15 +248,16 @@ final class EngagementModelTests: XCTestCase {
         XCTAssertNil(model.actionError)
     }
 
-    func testCancelledLoadKeepsPriorState() async {
-        var service = StubEngagementService(snapshotResult: sampleSnapshot(ranking: RankingStanding(nationalPercentile: 90, city: "Austin", cityRank: 5)))
-        let model = EngagementModel(service: service)
-        await model.load()
-        service.snapshotError = URLError(.cancelled)
-        let cancelled = EngagementModel(service: service)
-        await cancelled.load()
-        if case .failed = cancelled.phase { XCTFail("cancellation must not surface as a failure") }
-        XCTAssertEqual(model.phase, .ready)
+    func testACancelledFirstLoadIsNeitherReadyNorFailed() async {
+        for cancellation in [URLError(.cancelled) as Error, CancellationError()] {
+            var service = StubEngagementService(snapshotResult: sampleSnapshot(ranking: RankingStanding(nationalPercentile: 90, city: "Austin", cityRank: 5)))
+            service.snapshotError = cancellation
+            let model = EngagementModel(service: service)
+            await model.load()
+            XCTAssertEqual(model.phase, .loading, "abandoned work leaves the screen where it was")
+            XCTAssertNil(model.snapshot)
+            XCTAssertNil(model.refreshNotice)
+        }
     }
 }
 
