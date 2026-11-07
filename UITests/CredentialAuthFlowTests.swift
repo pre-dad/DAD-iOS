@@ -25,6 +25,17 @@ import XCTest
         field.typeText(text)
     }
 
+    /// Replaces a field's contents by selecting them all first. Per-character delete keystrokes are dropped by the
+    /// simulator keyboard, so they cannot clear a field reliably.
+    private func replaceText(in field: XCUIElement, with text: String, app: XCUIApplication) {
+        field.tap()
+        field.press(forDuration: 1.0)
+        let selectAll = app.menuItems["Select All"]
+        XCTAssertTrue(selectAll.waitForExistence(timeout: 5), "the edit menu must offer Select All")
+        selectAll.tap()
+        field.typeText(text)
+    }
+
     private func signInWithPassword(_ app: XCUIApplication, password: String) {
         // Phase D: password lives under the "More options" disclosure.
         app.buttons["More options"].tap()
@@ -55,12 +66,8 @@ import XCTest
         XCTAssertFalse(app.buttons["open-settings"].exists)
 
         let paste = app.textFields["Paste your sign-in link"]
-        // A center tap places the caret inside the short invalid URL; tap its trailing whitespace instead.
-        paste.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
-        paste.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: "https://example.com/not-ours".count))
-        XCTAssertEqual(paste.value as? String, "Paste your sign-in link")
         let signupLink = stubClaimLink + "&next=/account/dashboard"
-        paste.typeText(signupLink)
+        replaceText(in: paste, with: signupLink, app: app)
         XCTAssertEqual(paste.value as? String, signupLink)
         app.buttons["signup-continue"].tap()
 
