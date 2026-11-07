@@ -105,9 +105,10 @@ final class AnalyticsUploadTests: XCTestCase {
         let transport = ScriptedTransport { _, _ in (.serviceUnavailable, "{}") }
         let consent = MemoryAnalyticsConsent()
         let analytics = AnalyticsController(consent: consent, sink: WireAnalytics(origin: testOrigin, transport: transport, access: { nil }))
-        analytics.emit(.roleSelected)
-        try await Task.sleep(for: .milliseconds(100))
+        analytics.emit(.roleSelected)   // without consent the call returns before any task is spawned
         XCTAssertTrue(transport.seen.isEmpty)
+        let before = await analytics.pending
+        XCTAssertEqual(before, 0, "nothing is buffered until the donor allows it")
         XCTAssertNil(analytics.choice)
         analytics.choose(true)
         XCTAssertEqual(consent.choice, true)
@@ -117,8 +118,9 @@ final class AnalyticsUploadTests: XCTestCase {
         for _ in 0..<200 where await analytics.pending > 0 { try await Task.sleep(for: .milliseconds(10)) }
         let left = await analytics.pending
         XCTAssertEqual(left, 0)
-        analytics.emit(.irlCodeShown)
-        try await Task.sleep(for: .milliseconds(100))
+        analytics.emit(.irlCodeShown)   // declined: dropped synchronously, nothing queued to send
+        let after = await analytics.pending
+        XCTAssertEqual(after, 0)
         XCTAssertEqual(transport.calls(to: "/analytics/events").count, 1)
     }
 
