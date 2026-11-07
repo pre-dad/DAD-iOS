@@ -1,9 +1,8 @@
 import SwiftUI
 import DADFoundation
 
-// Moments of joy (Phase F): the single celebration screen shown once after a donor's first gift
-// completes. Full-height ink, a check, the gift framing, an optional Founding capsule, and two
-// actions. Motion is reduce-motion-gated and only the check scales in — numbers never animate.
+// The celebration shown once after a donor's first gift completes. Motion is reduce-motion-gated
+// and only the check scales in; numbers never animate.
 
 /// Shown as a full-screen cover after the first gift is set up. "Invite someone" routes to Circle;
 /// "Done" dismisses. Under Reduce Motion it appears with no animation at all.

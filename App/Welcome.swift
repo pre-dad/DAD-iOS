@@ -2,12 +2,8 @@ import SwiftUI
 import Combine
 import DADFoundation
 
-// Welcome + sign-in (unauthenticated stack), extracted from DADApp.swift (Phase D) so the
-// redesign never edits that hand-structured file. AppBackground and tokenColor live in
-// DADApp.swift; both files are in the same App target, so they resolve unchanged here.
-
 /// The Founding Donor window closes at the end of Dec 31 2026, New York time. Shown at most once per
-/// screen (Welcome here, the celebration in Phase F). After the deadline the line is hidden entirely.
+/// screen (Welcome and the celebration). After the deadline the line is hidden entirely.
 enum FoundingWindow {
     /// Start of Jan 1 2027 America/New_York — the first instant the window is closed.
     static let closesAt: Date = {
@@ -32,9 +28,8 @@ enum FoundingWindow {
     }
 }
 
-/// The unauthenticated landing (Phase D). Replaces the donor/partner fork with a single dark-ink
-/// Welcome: brand, value proposition, the Founding window (once), and three graded actions. Keeps
-/// the invitation + notice messages above the actions, and still emits `.roleSelected` on either path.
+/// The unauthenticated landing: brand, value proposition, the Founding window, the invitation and
+/// notice messages, and three graded actions. Each action emits `.roleSelected`.
 struct WelcomeScreen: View {
     let notice: String?
     var invitation: String?
@@ -82,7 +77,7 @@ struct WelcomeScreen: View {
     }
 }
 
-/// Sign-in method picker (PRD §5.1, redesigned in Phase D). Phone is the primary ("Continue with
+/// Sign-in method picker (PRD §5.1). Phone is the primary ("Continue with
 /// phone"), email link secondary. Methods `SignInCapabilities` reports unavailable are HIDDEN rather
 /// than shown disabled; any available Apple/Google/passkey render as a secondary row, and password
 /// lives under a "More options" disclosure. A "New to DAD?" card offers "Get started" (signup).
@@ -166,7 +161,7 @@ private struct PhoneSignIn: View {
             if model.phase == .requestingCode || isVerifying { ProgressView() }
         }
         .frame(maxWidth: 520, alignment: .leading).padding(28).frame(maxWidth: .infinity)
-        .accessibilityIdentifier("phone-sign-in")
+        .accessibilityElement(children: .contain).accessibilityIdentifier("phone-sign-in")
         .onChange(of: model.phase) { _, phase in if case .signedIn = phase { onSignedIn() } }
     }
 
@@ -394,7 +389,6 @@ struct SignInKit {
 
 /// The unauthenticated stack: role select → sign-in methods → the chosen method's flow. Verification
 /// runs through `establish` so the session (not this view) owns the network await and its epoch guard.
-// Internal (not file-private): referenced by DADApp.swift's rootContent after the Phase-D extraction.
 struct UnauthenticatedStack: View {
     let kit: SignInKit
     let establish: PhoneSignInModel.Establish
