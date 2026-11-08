@@ -451,7 +451,7 @@ struct UnauthenticatedStack: View {
         case .apple, .google:
             guard let oidc = kit.oidc else { return }
             let provider: OIDCProvider = method == .apple ? .apple : .google
-            let tokens: any IDTokenProvider = method == .apple ? AppleIDTokenProvider() : UnavailableIDTokenProvider()
+            guard let tokens: any IDTokenProvider = method == .apple ? AppleIDTokenProvider() : GoogleSignIn.provider else { return }
             let model = OIDCSignInModel(provider: provider, tokens: tokens, service: oidc, establish: establish)
             external = ExternalRun(title: method.title, phase: { model.phase }, start: { await model.start() })
             step = .external

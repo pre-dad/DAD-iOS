@@ -110,9 +110,9 @@ private extension AuthorizationRun {
     }
 }
 
-/// No Google id_token provider is linked into this build (the official SDK is a new dependency
-/// the project has not adopted), so Google sign-in is never switched on; this keeps the code path
-/// complete and honest if a build were ever to route here.
-struct UnavailableIDTokenProvider: IDTokenProvider {
-    func idToken() async throws -> String { throw ExternalSignInError.unsupported }
+/// The Google id_token provider, or nil while none is linked into this build (the official SDK is a new
+/// dependency the project has not adopted). Google sign-in is offered only when this returns a provider,
+/// so linking one here switches the button on once the client id is configured.
+enum GoogleSignIn {
+    static var provider: (any IDTokenProvider)? { nil }
 }
