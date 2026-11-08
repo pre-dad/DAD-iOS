@@ -240,7 +240,8 @@ final class AccountModel {
                 let capabilities = SignInCapabilities(config: SignInConfig(
                     appleFlag: Bundle.main.object(forInfoDictionaryKey: "DADAppleSignInEnabled") as? String,
                     googleClientID: Bundle.main.object(forInfoDictionaryKey: "DADGoogleClientID") as? String,
-                    passkeyRelyingParty: Bundle.main.object(forInfoDictionaryKey: "DADPasskeyRelyingParty") as? String))
+                    passkeyRelyingParty: Bundle.main.object(forInfoDictionaryKey: "DADPasskeyRelyingParty") as? String),
+                    googleProviderAvailable: GoogleSignIn.provider != nil)
                 kit = SignInKit(phone: auth, signup: credentialAuth, link: credentialAuth, password: credentialAuth,
                                 oidc: capabilities.apple || capabilities.google ? credentialAuth : nil,
                                 passkey: capabilities.passkey ? credentialAuth : nil, capabilities: capabilities,
@@ -637,7 +638,7 @@ private actor PreviewAccountSettings: AccountSettingsService {
         pushStreakAtRisk: true, pushStreakMilestone: true, pushStreakLapsed: true,
         pushBadgeEarned: true, pushEventNearby: false, pushEventReminder: true,
         pushEventPromoted: false, pushGiftProcessed: true, rankingsOptedOut: false,
-        networkVisible: true, volunteer: true)
+        networkVisible: true, volunteer: true, volunteerInterests: ["Food drives"])
 
     private func snapshot() -> AccountSettingsSnapshot {
         AccountSettingsSnapshot(
@@ -656,7 +657,7 @@ private actor PreviewAccountSettings: AccountSettingsService {
             pushEventNearby: preferences.pushEventNearby, pushEventReminder: preferences.pushEventReminder,
             pushEventPromoted: preferences.pushEventPromoted, pushGiftProcessed: preferences.pushGiftProcessed,
             rankingsOptedOut: preferences.rankingsOptedOut, networkVisible: preferences.networkVisible,
-            volunteer: preferences.volunteer)
+            volunteer: preferences.volunteer, volunteerInterests: preferences.volunteerInterests)
         return snapshot()
     }
     func deleteAccount() async throws {}

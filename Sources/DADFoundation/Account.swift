@@ -51,13 +51,21 @@ public struct AccountPreferences: Sendable, Equatable {
     public var rankingsOptedOut: Bool
     public var networkVisible: Bool
     public var volunteer: Bool
+    /// Free-form event interests (E-1), already trimmed and unique.
+    public private(set) var volunteerInterests: [String]
+    /// Set once the donor edits the interests; only then are they sent on save. Otherwise the field
+    /// is omitted and the server keeps what it has.
+    public private(set) var volunteerInterestsEdited = false
+
+    public static let maxInterests = 20
+    public static let maxInterestLength = 60
 
     public init(
         version: Int, referralEmails: Bool, marketingEmails: Bool, pushReferralConverted: Bool,
         pushStreakAtRisk: Bool, pushStreakMilestone: Bool, pushStreakLapsed: Bool,
         pushBadgeEarned: Bool, pushEventNearby: Bool, pushEventReminder: Bool,
         pushEventPromoted: Bool, pushGiftProcessed: Bool, rankingsOptedOut: Bool,
-        networkVisible: Bool, volunteer: Bool
+        networkVisible: Bool, volunteer: Bool, volunteerInterests: [String] = []
     ) {
         self.version = version
         self.referralEmails = referralEmails
@@ -74,6 +82,7 @@ public struct AccountPreferences: Sendable, Equatable {
         self.rankingsOptedOut = rankingsOptedOut
         self.networkVisible = networkVisible
         self.volunteer = volunteer
+        self.volunteerInterests = volunteerInterests
     }
 
     public struct Toggle: Sendable, Equatable {
@@ -107,6 +116,44 @@ public struct AccountPreferences: Sendable, Equatable {
 
     /// Inverted for display: "Show my ranking" = NOT opted out.
     public var showRanking: Bool { !rankingsOptedOut }
+
+    /// A copy with `text` added to the interests, or why it cannot be: blank text, over the length limit,
+    /// already present (ignoring case), or the list is full.
+    public func addingInterest(_ text: String) -> Result<AccountPreferences, InterestError> {
+        let interest = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !interest.isEmpty else { return .failure(.empty) }
+        guard interest.count <= Self.maxInterestLength else { return .failure(.tooLong) }
+        guard !volunteerInterests.contains(where: { $0.caseInsensitiveCompare(interest) == .orderedSame }) else {
+            return .failure(.duplicate)
+        }
+        guard volunteerInterests.count < Self.maxInterests else { return .failure(.full) }
+        var copy = self
+        copy.volunteerInterests.append(interest)
+        copy.volunteerInterestsEdited = true
+        return .success(copy)
+    }
+
+    /// A copy without `interest`; unknown values return self unchanged.
+    public func removingInterest(_ interest: String) -> AccountPreferences {
+        guard volunteerInterests.contains(interest) else { return self }
+        var copy = self
+        copy.volunteerInterests.removeAll { $0 == interest }
+        copy.volunteerInterestsEdited = true
+        return copy
+    }
+
+    public enum InterestError: Error, Sendable, Equatable {
+        case empty, tooLong, duplicate, full
+
+        public var message: String {
+            switch self {
+            case .empty: "Type an interest to add."
+            case .tooLong: "Keep each interest to \(AccountPreferences.maxInterestLength) characters or fewer."
+            case .duplicate: "That interest is already on your list."
+            case .full: "You can list up to \(AccountPreferences.maxInterests) interests."
+            }
+        }
+    }
 
     /// A copy with one toggle flipped by key; an unknown key returns self unchanged.
     public func with(_ key: String, _ value: Bool) -> AccountPreferences {

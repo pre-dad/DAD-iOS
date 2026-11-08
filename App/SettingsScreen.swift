@@ -109,6 +109,9 @@ struct AccountSettingsScreen: View {
                 get: { snapshot.preferences.volunteer },
                 set: { newValue in Task { await model.toggle("volunteer", newValue) } }
             )).disabled(model.isBusy).accessibilityIdentifier("pref-volunteer")
+            if snapshot.preferences.volunteer {
+                VolunteerInterestsSection(model: model, interests: snapshot.preferences.volunteerInterests)
+            }
             if let analytics {
                 Toggle("Usage analytics", isOn: Binding(get: { analytics.choice == true }, set: { analytics.choose($0) }))
                     .accessibilityIdentifier("analytics-toggle")
@@ -214,5 +217,51 @@ private struct PasswordSection: View {
         }
         .accessibilityElement(children: .contain).accessibilityIdentifier("password-section")
         .onChange(of: model.signedOut) { _, signedOut in if signedOut { onSignedOut() } }
+    }
+}
+
+/// Free-form volunteer interests under the volunteer toggle: add one at a time, remove from the list.
+private struct VolunteerInterestsSection: View {
+    let model: AccountSettingsModel
+    let interests: [String]
+    @State private var draft = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Volunteer interests").font(.headline).accessibilityAddTraits(.isHeader)
+            HStack {
+                TextField("Add an interest", text: $draft)
+                    .textFieldStyle(.roundedBorder).submitLabel(.done)
+                    .onSubmit { add() }.accessibilityIdentifier("interest-input")
+                Button("Add") { add() }
+                    .buttonStyle(DADButtonStyle(.secondary)).disabled(model.isBusy || draft.isEmpty)
+                    .accessibilityIdentifier("interest-add")
+            }
+            if let error = model.interestError {
+                Text(error).font(.footnote).foregroundStyle(Color.dad("fail")).accessibilityIdentifier("interest-error")
+            }
+            if interests.isEmpty {
+                Text("No interests yet.").font(.footnote).foregroundStyle(.secondary)
+            }
+            ForEach(interests, id: \.self) { interest in
+                HStack {
+                    Text(interest).frame(maxWidth: .infinity, alignment: .leading)
+                    Button { Task { await model.removeInterest(interest) } } label: {
+                        Image(systemName: "minus.circle")
+                    }
+                    .disabled(model.isBusy)
+                    .accessibilityLabel("Remove \(interest)")
+                    .accessibilityIdentifier("interest-remove-\(interest)")
+                }
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("interest-row-\(interest)")
+            }
+        }
+        .accessibilityElement(children: .contain).accessibilityIdentifier("interests-section")
+    }
+
+    private func add() {
+        let text = draft
+        Task { if await model.addInterest(text) { draft = "" } }
     }
 }

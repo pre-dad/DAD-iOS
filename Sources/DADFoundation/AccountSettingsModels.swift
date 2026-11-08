@@ -37,6 +37,8 @@ public final class AccountSettingsModel {
     /// True once deleted or signed out — the UI leaves the settings shell.
     public private(set) var signedOut = false
     public private(set) var actionError: String?
+    /// Why the last interest entry was rejected, shown beside the field.
+    public private(set) var interestError: String?
     /// The server refused deletion (409) because a monthly gift is still set to renew or a checkout is
     /// open. The screen then offers the real cancel-gift flow instead of a dead end; a retry after the
     /// gift is cancelled clears it.
@@ -70,6 +72,41 @@ public final class AccountSettingsModel {
             snapshot = try await service.savePreferences(current.preferences.with(key, value))
         } catch {
             actionError = error.userMessage
+        }
+    }
+
+    /// Add one free-form volunteer interest and persist. A rejected entry sets `interestError` and
+    /// saves nothing; returns whether the interest was saved so the field can clear.
+    @discardableResult
+    public func addInterest(_ text: String) async -> Bool {
+        guard let current = snapshot, !isBusy else { return false }
+        switch current.preferences.addingInterest(text) {
+        case .failure(let reason):
+            interestError = reason.message
+            return false
+        case .success(let updated):
+            interestError = nil
+            return await save(updated)
+        }
+    }
+
+    public func removeInterest(_ interest: String) async {
+        guard let current = snapshot, !isBusy else { return }
+        interestError = nil
+        await save(current.preferences.removingInterest(interest))
+    }
+
+    @discardableResult
+    private func save(_ preferences: AccountPreferences) async -> Bool {
+        isBusy = true
+        defer { isBusy = false }
+        actionError = nil
+        do {
+            snapshot = try await service.savePreferences(preferences)
+            return true
+        } catch {
+            actionError = error.userMessage
+            return false
         }
     }
 
