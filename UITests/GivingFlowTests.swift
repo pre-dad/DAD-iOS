@@ -7,7 +7,7 @@ import XCTest
     func testSetGiftScreenRendersAndSteps() {
         let app = XCUIApplication()
         app.launchArguments = ["--preview-giving"]
-        app.launch()
+        app.launchInForeground()
 
         let screen = app.otherElements["gift-screen"]
         XCTAssertTrue(screen.waitForExistence(timeout: 5), "gift screen should appear")
@@ -27,7 +27,7 @@ import XCTest
     func testCancelConfirmationAppears() {
         let app = XCUIApplication()
         app.launchArguments = ["--preview-giving"]
-        app.launch()
+        app.launchInForeground()
 
         XCTAssertTrue(app.otherElements["gift-screen"].waitForExistence(timeout: 5))
         let cancel = app.buttons["Cancel gift"]

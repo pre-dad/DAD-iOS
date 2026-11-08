@@ -7,7 +7,7 @@ import XCTest
     func testSettingsRendersProfileAndToggles() {
         let app = XCUIApplication()
         app.launchArguments = ["--preview-settings"]
-        app.launch()
+        app.launchInForeground()
 
         XCTAssertTrue(app.otherElements["settings-screen"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["settings-email"].waitForExistence(timeout: 3))
@@ -18,7 +18,7 @@ import XCTest
     func testDeleteGateDisabledUntilConfirmWordTyped() {
         let app = XCUIApplication()
         app.launchArguments = ["--preview-settings"]
-        app.launch()
+        app.launchInForeground()
 
         XCTAssertTrue(app.otherElements["settings-screen"].waitForExistence(timeout: 5))
         let start = app.buttons["delete-start"]
@@ -40,7 +40,7 @@ import XCTest
     func testSignOutLeavesTheShell() {
         let app = XCUIApplication()
         app.launchArguments = ["--preview-settings"]
-        app.launch()
+        app.launchInForeground()
 
         XCTAssertTrue(app.otherElements["settings-screen"].waitForExistence(timeout: 5))
         let signout = app.buttons["settings-signout"]
@@ -52,7 +52,7 @@ import XCTest
     func testConfirmedDeleteLeavesTheShell() {
         let app = XCUIApplication()
         app.launchArguments = ["--preview-settings"]
-        app.launch()
+        app.launchInForeground()
 
         XCTAssertTrue(app.buttons["delete-start"].waitForExistence(timeout: 5))
         app.buttons["delete-start"].tap()
@@ -68,7 +68,7 @@ import XCTest
     func testKeepMyAccountBacksOutAndClearsTheTypedWord() {
         let app = XCUIApplication()
         app.launchArguments = ["--preview-settings"]
-        app.launch()
+        app.launchInForeground()
 
         XCTAssertTrue(app.buttons["delete-start"].waitForExistence(timeout: 5))
         app.buttons["delete-start"].tap()
@@ -86,7 +86,7 @@ import XCTest
     func testLargestAccessibilityTextStillReachesSignOut() {
         let app = XCUIApplication()
         app.launchArguments = ["--preview-settings", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
-        app.launch()
+        app.launchInForeground()
 
         XCTAssertTrue(app.buttons["settings-signout"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["delete-start"].exists)
@@ -95,7 +95,7 @@ import XCTest
     func testVolunteerInterestsCanBeAddedAndRemoved() {
         let app = XCUIApplication()
         app.launchArguments = ["--preview-settings"]
-        app.launch()
+        app.launchInForeground()
 
         XCTAssertTrue(app.otherElements["settings-screen"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.otherElements["interest-row-Food drives"].waitForExistence(timeout: 5), "the saved interest loads")

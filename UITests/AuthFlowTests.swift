@@ -6,7 +6,7 @@ import XCTest
     func testSignedOutLaunchReachesPhoneSignIn() {
         let app = XCUIApplication()
         app.launchArguments = ["--preview-signed-out"]
-        app.launch()
+        app.launchInForeground()
 
         // Welcome is the unauthenticated entry point; its sign-in path reaches the methods.
         XCTAssertTrue(app.buttons["I already give — sign in"].waitForExistence(timeout: 10))
@@ -25,7 +25,7 @@ import XCTest
     func testPhoneNumberAdvancesToCodeEntry() {
         let app = XCUIApplication()
         app.launchArguments = ["--preview-signed-out"]
-        app.launch()
+        app.launchInForeground()
 
         app.buttons["I already give — sign in"].tap()
         XCTAssertTrue(app.buttons["Continue with phone"].waitForExistence(timeout: 10))
@@ -52,7 +52,7 @@ import XCTest
     func testUnwiredMethodsAreHidden() {
         let app = XCUIApplication()
         app.launchArguments = ["--preview-signed-out"]
-        app.launch()
+        app.launchInForeground()
 
         app.buttons["I already give — sign in"].tap()
         XCTAssertTrue(app.buttons["Continue with phone"].waitForExistence(timeout: 10))

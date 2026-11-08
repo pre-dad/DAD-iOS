@@ -24,7 +24,7 @@ import XCTest
     func testSignInThenDeleteAccountReturnsToSignIn() {
         let app = XCUIApplication()
         app.launchArguments = ["--stub-backend"]
-        app.launch()
+        app.launchInForeground()
         signIn(app, code: "123456")
 
         XCTAssertTrue(app.buttons["open-settings"].waitForExistence(timeout: 15))
@@ -43,7 +43,7 @@ import XCTest
     func testWrongCodeKeepsPersonSignedOut() {
         let app = XCUIApplication()
         app.launchArguments = ["--stub-backend"]
-        app.launch()
+        app.launchInForeground()
         signIn(app, code: "654321")
         XCTAssertFalse(app.buttons["open-settings"].waitForExistence(timeout: 4))
         XCTAssertTrue(app.textFields["Verification code"].exists)
@@ -53,7 +53,7 @@ import XCTest
         // The analytics question is a sheet shown once after first sign-in, not part of Welcome.
         let app = XCUIApplication()
         app.launchArguments = ["--stub-backend", "--stub-analytics-unset"]
-        app.launch()
+        app.launchInForeground()
         signIn(app, code: "123456")
         XCTAssertTrue(app.buttons["analytics-allow"].waitForExistence(timeout: 20), "the question is asked after sign-in")
         app.buttons["analytics-allow"].tap()
@@ -64,14 +64,14 @@ import XCTest
     func testATappedNotificationOpensItsScreen() {
         let app = XCUIApplication()
         app.launchArguments = ["--stub-backend", "--stub-signed-in", "--stub-push-tap-gifts"]
-        app.launch()
+        app.launchInForeground()
         XCTAssertTrue(app.buttons["gift-row-0"].waitForExistence(timeout: 20), "the gifts notification opens gift history")
     }
 
     func testAnInviteLinkNamesTheReferrerBeforeSignIn() {
         let app = XCUIApplication()
         app.launchArguments = ["--stub-backend", "--stub-open-invite"]
-        app.launch()
+        app.launchInForeground()
         let invitation = app.staticTexts["auth-invitation"]
         XCTAssertTrue(invitation.waitForExistence(timeout: 20), "the opened invite link is captured natively")
         XCTAssertEqual(invitation.label, "Alex R invited you to give with DAD.")

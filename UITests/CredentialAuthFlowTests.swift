@@ -9,7 +9,7 @@ import XCTest
     private func launch() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["--stub-backend"]
-        app.launch()
+        app.launchInForeground()
         // Welcome's "I already give — sign in" reaches the sign-in methods.
         XCTAssertTrue(app.buttons["I already give — sign in"].waitForExistence(timeout: 15))
         app.buttons["I already give — sign in"].tap()

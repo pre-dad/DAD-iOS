@@ -8,7 +8,7 @@ import XCTest
     private func openSettings() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["--stub-backend", "--stub-signed-in"]
-        app.launch()
+        app.launchInForeground()
         XCTAssertTrue(app.buttons["open-settings"].waitForExistence(timeout: 20))
         app.buttons["open-settings"].tap()
         XCTAssertTrue(app.otherElements["settings-screen"].waitForExistence(timeout: 10))
