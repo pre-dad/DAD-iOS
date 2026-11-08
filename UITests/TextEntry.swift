@@ -6,6 +6,8 @@ extension XCUIElement {
     /// inserts at the caret instead of replacing, so the result is verified and the selection retried.
     func replaceText(with text: String, in app: XCUIApplication) {
         XCTAssertTrue(waitForExistence(timeout: 10), "\(self)")
+        // A secure field reports one bullet per character, so its contents are checked by length.
+        let expected = elementType == .secureTextField ? String(repeating: "•", count: text.count) : text
         for _ in 0..<3 {
             tap()
             if hasEnteredText {
@@ -15,9 +17,9 @@ extension XCUIElement {
                 selectAll.tap()
             }
             typeText(text)
-            if value as? String == text { return }
+            if value as? String == expected { return }
         }
-        XCTAssertEqual(value as? String, text, "the field must hold exactly the replacement text")
+        XCTAssertEqual(value as? String, expected, "the field must hold exactly the replacement text")
     }
 
     private var hasEnteredText: Bool {
