@@ -1,7 +1,7 @@
 {
-  "version": "2.11.0",
+  "version": "2.12.0",
   "source_repository": "pre-dad/DAD-Main",
-  "source_revision": "2047d6a4f2d3cc8297e6c102fc8f7a30e45143ee",
-  "release_tag": "mobile-foundation-v2.11.0",
-  "manifest_sha256": "e5f9646da29b92bb7edf180d035c0ca3f1809fc853af51622a26bee76c3fc7e3"
+  "source_revision": "b06740325e5af0ed68226b237452a1b5ef9681b1",
+  "release_tag": "mobile-foundation-v2.12.0",
+  "manifest_sha256": "7ec5f3d5289441f588e32587f237884185cee52dbe9c33bba072565fa4af2f51"
 }
