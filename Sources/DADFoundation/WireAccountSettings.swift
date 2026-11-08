@@ -80,6 +80,7 @@ public struct WireAccountSettings: AccountSettingsService {
             push_badge_earned: p.pushBadgeEarned, push_event_nearby: p.pushEventNearby,
             push_event_reminder: p.pushEventReminder, push_event_promoted: p.pushEventPromoted,
             rankings_opted_out: p.rankingsOptedOut, network_visible: p.networkVisible, volunteer: p.volunteer,
+            volunteer_interests: p.volunteerInterestsEdited ? p.volunteerInterests : nil,
             push_gift_processed: p.pushGiftProcessed)
     }
 
@@ -93,6 +94,7 @@ public struct WireAccountSettings: AccountSettingsService {
                 pushBadgeEarned: p.push_badge_earned, pushEventNearby: p.push_event_nearby,
                 pushEventReminder: p.push_event_reminder, pushEventPromoted: p.push_event_promoted,
                 pushGiftProcessed: p.push_gift_processed, rankingsOptedOut: p.rankings_opted_out,
-                networkVisible: p.network_visible, volunteer: p.volunteer))
+                networkVisible: p.network_visible, volunteer: p.volunteer,
+                volunteerInterests: p.volunteer_interests))
     }
 }

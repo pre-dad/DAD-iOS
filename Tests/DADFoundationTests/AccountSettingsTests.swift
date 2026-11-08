@@ -11,6 +11,34 @@ final class AccountPreferencesTests: XCTestCase {
             networkVisible: true, volunteer: true)
     }
 
+    func testAddingInterestTrimsAndMarksEdited() throws {
+        let updated = try prefs().addingInterest("  Food drives \n").get()
+        XCTAssertEqual(updated.volunteerInterests, ["Food drives"])
+        XCTAssertTrue(updated.volunteerInterestsEdited)
+        XCTAssertFalse(prefs().volunteerInterestsEdited)
+    }
+
+    func testAddingInterestRejectsBlankDuplicateOverlongAndFull() throws {
+        let base = try prefs().addingInterest("Tutoring").get()
+        XCTAssertEqual(try? XCTUnwrap(base.addingInterest("   ").failureValue), .empty)
+        XCTAssertEqual(base.addingInterest("tutoring").failureValue, .duplicate, "dedupe ignores case")
+        XCTAssertEqual(base.addingInterest(" Tutoring ").failureValue, .duplicate, "dedupe applies after trimming")
+        XCTAssertEqual(base.addingInterest(String(repeating: "x", count: 61)).failureValue, .tooLong)
+        XCTAssertNotNil(try? base.addingInterest(String(repeating: "x", count: 60)).get())
+        var full = prefs()
+        for index in 0..<AccountPreferences.maxInterests { full = try full.addingInterest("Interest \(index)").get() }
+        XCTAssertEqual(full.volunteerInterests.count, 20)
+        XCTAssertEqual(full.addingInterest("One more").failureValue, .full)
+    }
+
+    func testRemovingInterest() throws {
+        let base = try prefs().addingInterest("A").get().addingInterest("B").get()
+        let removed = base.removingInterest("A")
+        XCTAssertEqual(removed.volunteerInterests, ["B"])
+        XCTAssertTrue(removed.volunteerInterestsEdited)
+        XCTAssertEqual(prefs().removingInterest("missing"), prefs(), "removing an unknown interest changes nothing")
+    }
+
     func testWithFlipsTheRightToggle() {
         XCTAssertTrue(prefs().with("marketing_emails", true).marketingEmails)
         XCTAssertFalse(prefs().with("push_event_reminder", false).pushEventReminder)
@@ -51,6 +79,7 @@ final class AccountSettingsModelTests: XCTestCase {
         var failSignOut = false
         private(set) var deleted = false
         private(set) var didSignOut = false
+        private(set) var lastSaved: AccountPreferences?
         private var prefs = AccountPreferences(
             version: 3, referralEmails: true, marketingEmails: false, pushReferralConverted: true,
             pushStreakAtRisk: true, pushStreakMilestone: true, pushStreakLapsed: true,
@@ -68,6 +97,7 @@ final class AccountSettingsModelTests: XCTestCase {
         }
         func savePreferences(_ preferences: AccountPreferences) async throws -> AccountSettingsSnapshot {
             if failSave { throw AccountError.unavailable }
+            lastSaved = preferences
             prefs = AccountPreferences(
                 version: preferences.version + 1, referralEmails: preferences.referralEmails,
                 marketingEmails: preferences.marketingEmails, pushReferralConverted: preferences.pushReferralConverted,
@@ -76,7 +106,7 @@ final class AccountSettingsModelTests: XCTestCase {
                 pushEventNearby: preferences.pushEventNearby, pushEventReminder: preferences.pushEventReminder,
                 pushEventPromoted: preferences.pushEventPromoted, pushGiftProcessed: preferences.pushGiftProcessed,
                 rankingsOptedOut: preferences.rankingsOptedOut, networkVisible: preferences.networkVisible,
-                volunteer: preferences.volunteer)
+                volunteer: preferences.volunteer, volunteerInterests: preferences.volunteerInterests)
             return snap()
         }
         func deleteAccount() async throws {
@@ -111,6 +141,51 @@ final class AccountSettingsModelTests: XCTestCase {
         await model.toggle("marketing_emails", true)
         XCTAssertEqual(model.snapshot?.preferences.version, 4)
         XCTAssertTrue(model.snapshot!.preferences.marketingEmails)
+    }
+
+    func testAddAndRemoveInterestSaveThroughThePreferencesPath() async {
+        let svc = FakeService()
+        let model = AccountSettingsModel(service: svc)
+        await model.load()
+        let added = await model.addInterest(" Tutoring ")
+        XCTAssertTrue(added)
+        XCTAssertEqual(model.snapshot?.preferences.volunteerInterests, ["Tutoring"])
+        XCTAssertEqual(model.snapshot?.preferences.version, 4)
+        XCTAssertEqual(svc.lastSaved?.version, 3, "the save carries the version it read")
+        XCTAssertTrue(svc.lastSaved?.volunteerInterestsEdited == true)
+        await model.removeInterest("Tutoring")
+        XCTAssertEqual(model.snapshot?.preferences.volunteerInterests, [])
+        XCTAssertEqual(model.snapshot?.preferences.version, 5)
+    }
+
+    func testRejectedInterestSavesNothingAndExplains() async {
+        let svc = FakeService()
+        let model = AccountSettingsModel(service: svc)
+        await model.load()
+        let added = await model.addInterest("   ")
+        XCTAssertFalse(added)
+        XCTAssertNil(svc.lastSaved)
+        XCTAssertEqual(model.interestError, AccountPreferences.InterestError.empty.message)
+    }
+
+    func testFailedInterestSaveKeepsTheListAndSurfacesError() async {
+        let svc = FakeService()
+        let model = AccountSettingsModel(service: svc)
+        await model.load()
+        svc.failSave = true
+        let added = await model.addInterest("Tutoring")
+        XCTAssertFalse(added)
+        XCTAssertEqual(model.snapshot?.preferences.volunteerInterests, [])
+        XCTAssertNotNil(model.actionError)
+        XCTAssertFalse(model.isBusy)
+    }
+
+    func testTogglingLeavesInterestsOutOfTheSave() async {
+        let svc = FakeService()
+        let model = AccountSettingsModel(service: svc)
+        await model.load()
+        await model.toggle("marketing_emails", true)
+        XCTAssertEqual(svc.lastSaved?.volunteerInterestsEdited, false)
     }
 
     func testDeleteRequiresConfirmThenWipes() async {
@@ -208,5 +283,12 @@ final class AccountSettingsModelTests: XCTestCase {
         XCTAssertEqual(AccountProfileSummary(email: "a", accountRole: "DONOR", zip: nil, city: nil, phone: nil).zipLabel, "Not set")
         XCTAssertEqual(AccountProfileSummary(email: "a", accountRole: "DONOR", zip: "", city: nil, phone: nil).zipLabel, "Not set")
         XCTAssertEqual(AccountProfileSummary(email: "a", accountRole: "DONOR", zip: "78701", city: nil, phone: nil).zipLabel, "78701")
+    }
+}
+
+private extension Result {
+    var failureValue: Failure? {
+        if case .failure(let error) = self { return error }
+        return nil
     }
 }

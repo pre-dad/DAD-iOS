@@ -91,4 +91,33 @@ import XCTest
         XCTAssertTrue(app.buttons["settings-signout"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["delete-start"].exists)
     }
+
+    func testVolunteerInterestsCanBeAddedAndRemoved() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--preview-settings"]
+        app.launch()
+
+        XCTAssertTrue(app.otherElements["settings-screen"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.otherElements["interest-row-Food drives"].waitForExistence(timeout: 5), "the saved interest loads")
+
+        let field = app.textFields["interest-input"]
+        XCTAssertTrue(field.waitForExistence(timeout: 3))
+        field.tap()
+        field.typeText("  Tutoring ")
+        app.buttons["interest-add"].tap()
+        XCTAssertTrue(app.otherElements["interest-row-Tutoring"].waitForExistence(timeout: 5), "added trimmed")
+
+        field.tap()
+        field.typeText("tutoring")
+        app.buttons["interest-add"].tap()
+        XCTAssertTrue(app.staticTexts["interest-error"].waitForExistence(timeout: 5), "a duplicate is refused")
+
+        let remove = app.buttons["Remove Food drives"]
+        XCTAssertTrue(remove.exists, "VoiceOver label names the interest")
+        remove.tap()
+        let gone = NSPredicate(format: "exists == false")
+        expectation(for: gone, evaluatedWith: app.otherElements["interest-row-Food drives"])
+        waitForExpectations(timeout: 5)
+        XCTAssertTrue(app.otherElements["interest-row-Tutoring"].exists)
+    }
 }
