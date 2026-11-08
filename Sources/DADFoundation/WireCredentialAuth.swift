@@ -72,10 +72,10 @@ public struct WireCredentialAuth: SignupService, SignInLinkService, PasswordSign
 
     // MARK: Apple / Google
 
-    public func signIn(provider: OIDCProvider, idToken: String) async throws -> Credentials {
-        guard !idToken.isEmpty, idToken.utf8.count <= 8192 else { throw AccountError.invalidInput }
+    public func signIn(provider: OIDCProvider, idToken: String, nonce: String) async throws -> Credentials {
+        guard !idToken.isEmpty, idToken.utf8.count <= 8192, (1...256).contains(nonce.count) else { throw AccountError.invalidInput }
         let path = Operations.oidcSignIn.Input.Path(provider: provider == .apple ? .apple : .google)
-        let body = Operations.oidcSignIn.Input.Body.jsonPayload(id_token: idToken, device_name: deviceName, platform: .IOS)
+        let body = Operations.oidcSignIn.Input.Body.jsonPayload(id_token: idToken, nonce: nonce, device_name: deviceName, platform: .IOS)
         switch try await client.oidcSignIn(.init(path: path, body: .json(body))) {
         case .ok(let response):
             guard case .NativeSession(let session) = try response.body.json else { throw AccountError.invalidResponse }

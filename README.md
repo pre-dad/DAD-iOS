@@ -30,7 +30,7 @@ AppIntents metadata-extraction diagnostic is not suppressed; this app defines no
 
 ## Shared contract and native boundaries
 
-`foundation.lock.json` pins mobile foundation 2.11.0 and its manifest digest. The vendored
+`foundation.lock.json` pins mobile foundation 2.12.0 and its manifest digest. The vendored
 release is verified before generation. `prepare-client.mjs` copies the Swift generator input, null-only Codable adapter, tokens,
 and link policy into ignored generator inputs. Apple's pinned Swift generator produces
 types and a client during the build, scoped to profile, claim, refresh, and logout.
@@ -90,7 +90,8 @@ invented or committed; supply, per method:
 
 - **Sign in with Apple:** a signing team, the "Sign in with Apple" capability
   (`com.apple.developer.applesignin` entitlement) on the app ID, then build setting
-  `DAD_APPLE_SIGNIN_ENABLED=YES`. DAD-Main must also have Apple configured (`oidcSignIn` is 503 otherwise).
+  `DAD_APPLE_SIGNIN_ENABLED=YES`. DAD-Main must also have Apple configured (`oidcSignIn` is 503 otherwise). Each attempt binds a fresh
+  random nonce: Apple receives its SHA-256 hex, DAD-Main receives the raw value.
 - **Passkeys:** the Associated Domains capability on the app ID with `DAD_ASSOCIATED_DOMAIN=<domain>` (the
   entitlement's `webcredentials:` entry), an `apple-app-site-association` file for that domain listing the final
   bundle ID, and build setting `DAD_PASSKEY_RP_ID=<domain>` (bare hostname, the relying-party ID DAD-Main uses).

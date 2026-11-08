@@ -1,11 +1,11 @@
 {
-  "version": "2.11.0",
+  "version": "2.12.0",
   "source_repository": "pre-dad/DAD-Main",
-  "source_revision": "2047d6a4f2d3cc8297e6c102fc8f7a30e45143ee",
+  "source_revision": "b06740325e5af0ed68226b237452a1b5ef9681b1",
   "files": {
-    "openapi.json": "6b86038010f539e2c53ecacb4799bee6974a37ad6caf53f2e85bb60d27266006",
-    "mobile.openapi.json": "aa6d6988ec8844cd4c5e88fbfd41825dedee97c02bef50797a7ce89ddb7a34e7",
-    "swift.openapi.json": "2fd7fa77979febee6678263c5007acc6dc4d93000e9dbec21339161f553ccd95",
+    "openapi.json": "d776fd65b8e24c2b60bdde53fe3665ee3c850e5af55c46f27640f5c9a7bf4800",
+    "mobile.openapi.json": "36ee0567b43a4baed65c96f7ff72d0d041d9717fb26bf4c63bfc84f04eeea3c5",
+    "swift.openapi.json": "2530163e2bc081efdbc43dc44a53ca40edf85c0949ebc8b4fbf172fee044538a",
     "DADNullValue.swift": "548fa25336cde385a181b16fb959ee3f5b652c2cff4bb870068fe760a0908028",
     "tokens.json": "8f9b86ede46ba830fb991667a191e1b3ebdf13712a06d27a1276275c938efac0",
     "links.json": "462b33a3053d894aa2aeb81f0c9d051c5e74a8aea461f9a47555b0c3e72c59fe",
