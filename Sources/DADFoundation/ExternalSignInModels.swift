@@ -69,13 +69,15 @@ public enum ExternalSignInError: Error, Sendable, Equatable {
     case unsupported
 }
 
-/// Produces a provider `id_token` through the platform sign-in UI (Apple: AuthenticationServices).
+/// Produces a provider `id_token` through the platform sign-in UI (Apple: AuthenticationServices),
+/// binding `nonce` into the provider request (Apple takes `nonce.hashed`, Google `nonce.raw`).
 public protocol IDTokenProvider: Sendable {
-    func idToken() async throws -> String
+    func idToken(nonce: OIDCNonce) async throws -> String
 }
 
 public protocol OIDCSignInService: Sendable {
-    func signIn(provider: OIDCProvider, idToken: String) async throws -> Credentials
+    /// `nonce` is the raw value the token was bound to; the server checks the id_token's claim against it.
+    func signIn(provider: OIDCProvider, idToken: String, nonce: String) async throws -> Credentials
 }
 
 public struct PasskeyChallenge: Sendable, Equatable {
@@ -168,20 +170,22 @@ public final class OIDCSignInModel {
     public let provider: OIDCProvider
     private let tokens: any IDTokenProvider
     private let service: any OIDCSignInService
+    private let nonces: any NonceGenerator
     private let establish: PhoneSignInModel.Establish
 
     public init(provider: OIDCProvider, tokens: any IDTokenProvider, service: any OIDCSignInService,
-                establish: @escaping PhoneSignInModel.Establish) {
-        self.provider = provider; self.tokens = tokens; self.service = service; self.establish = establish
+                nonces: any NonceGenerator = SecureNonceGenerator(), establish: @escaping PhoneSignInModel.Establish) {
+        self.provider = provider; self.tokens = tokens; self.service = service; self.nonces = nonces; self.establish = establish
     }
 
     public func start() async {
         if case .working = phase { return }
         phase = .working
         do {
-            let token = try await tokens.idToken()
+            let nonce = nonces.make()
+            let token = try await tokens.idToken(nonce: nonce)
             let service = self.service, provider = self.provider
-            let credentials = try await establish { try await service.signIn(provider: provider, idToken: token) }
+            let credentials = try await establish { try await service.signIn(provider: provider, idToken: token, nonce: nonce.raw) }
             phase = .signedIn(credentials)
         } catch {
             if error.isCancellation || error as? ExternalSignInError == .cancelled { phase = .idle; return }
