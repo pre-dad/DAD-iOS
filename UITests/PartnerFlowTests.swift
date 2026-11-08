@@ -8,7 +8,7 @@ import XCTest
     func testAdminPortalRendersVerifiedFiguresAndCanManage() {
         let app = XCUIApplication()
         app.launchArguments = ["--preview-partner"]
-        app.launch()
+        app.launchInForeground()
 
         let portal = app.otherElements["partner-portal"]
         XCTAssertTrue(portal.waitForExistence(timeout: 5), "partner portal should appear")
@@ -27,7 +27,7 @@ import XCTest
     func testInviteNeedsValidEmailAndRemoveNeedsConfirmation() {
         let app = XCUIApplication()
         app.launchArguments = ["--preview-partner"]
-        app.launch()
+        app.launchInForeground()
 
         XCTAssertTrue(app.buttons["Organization"].waitForExistence(timeout: 5))
         app.buttons["Organization"].tap()
@@ -60,7 +60,7 @@ import XCTest
     func testViewerIsReadOnly() {
         let app = XCUIApplication()
         app.launchArguments = ["--preview-partner-viewer"]
-        app.launch()
+        app.launchInForeground()
 
         XCTAssertTrue(app.otherElements["partner-portal"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Organization"].waitForExistence(timeout: 5))
@@ -75,7 +75,7 @@ import XCTest
     func testEmailedLinkSignsInAndSignOutReturnsToTheStart() {
         let app = XCUIApplication()
         app.launchArguments = ["--stub-backend"]
-        app.launch()
+        app.launchInForeground()
 
         XCTAssertTrue(app.buttons["Partner organization? Sign in here"].waitForExistence(timeout: 10))
         app.buttons["Partner organization? Sign in here"].tap()
@@ -107,7 +107,7 @@ import XCTest
     func testRestoredPartnerManagesTheOrganization() {
         let app = XCUIApplication()
         app.launchArguments = ["--stub-backend", "--stub-partner-signed-in"]
-        app.launch()
+        app.launchInForeground()
 
         XCTAssertTrue(app.buttons["Organization"].waitForExistence(timeout: 10), "a stored partner session reopens the portal")
         app.buttons["People"].tap()
@@ -136,7 +136,7 @@ import XCTest
     private func launchSignedInPartner(_ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["--stub-backend", "--stub-partner-signed-in"] + extra
-        app.launch()
+        app.launchInForeground()
         return app
     }
 
@@ -223,7 +223,7 @@ import XCTest
     func testPendingApplicationIsShownAboveSignIn() {
         let app = XCUIApplication()
         app.launchArguments = ["--stub-backend", "--stub-application-pending"]
-        app.launch()
+        app.launchInForeground()
         XCTAssertTrue(app.buttons["Partner organization? Sign in here"].waitForExistence(timeout: 10))
         app.buttons["Partner organization? Sign in here"].tap()
         let card = app.otherElements["partner-application-status"]
@@ -235,7 +235,7 @@ import XCTest
     func testApprovedAndUnknownApplicationStatusesAreWordedHonestly() {
         let approved = XCUIApplication()
         approved.launchArguments = ["--stub-backend", "--stub-application-approved"]
-        approved.launch()
+        approved.launchInForeground()
         approved.buttons["Partner organization? Sign in here"].tap()
         XCTAssertTrue(approved.staticTexts["partner-application-message"].waitForExistence(timeout: 5))
         XCTAssertTrue(approved.staticTexts["partner-application-message"].label.contains("is approved"))
@@ -243,7 +243,7 @@ import XCTest
 
         let unknown = XCUIApplication()
         unknown.launchArguments = ["--stub-backend", "--stub-application-unknown"]
-        unknown.launch()
+        unknown.launchInForeground()
         unknown.buttons["Partner organization? Sign in here"].tap()
         XCTAssertTrue(unknown.staticTexts["partner-application-message"].waitForExistence(timeout: 5))
         XCTAssertFalse(unknown.staticTexts["partner-application-message"].label.contains("approved"))
@@ -252,7 +252,7 @@ import XCTest
     func testNoApplicationCardWithoutAReceipt() {
         let app = XCUIApplication()
         app.launchArguments = ["--stub-backend"]
-        app.launch()
+        app.launchInForeground()
         XCTAssertTrue(app.buttons["Partner organization? Sign in here"].waitForExistence(timeout: 10))
         app.buttons["Partner organization? Sign in here"].tap()
         XCTAssertTrue(app.textFields["partner-sign-in-email"].waitForExistence(timeout: 5))
@@ -264,7 +264,7 @@ import XCTest
     private func openApplication(_ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["--stub-backend"] + extra
-        app.launch()
+        app.launchInForeground()
         XCTAssertTrue(app.buttons["Partner organization? Sign in here"].waitForExistence(timeout: 10))
         app.buttons["Partner organization? Sign in here"].tap()
         let apply = app.buttons["partner-apply-in-app"]

@@ -8,7 +8,7 @@ import XCTest
     func testEventsHomeRendersListAndInviteOnlyMarker() {
         let app = XCUIApplication()
         app.launchArguments = ["--preview-events"]
-        app.launch()
+        app.launchInForeground()
 
         let home = app.otherElements["events-home"]
         XCTAssertTrue(home.waitForExistence(timeout: 5), "events home should appear")
@@ -24,7 +24,7 @@ import XCTest
     func testReserveShowsInlineConfirmation() {
         let app = XCUIApplication()
         app.launchArguments = ["--preview-events"]
-        app.launch()
+        app.launchInForeground()
 
         XCTAssertTrue(app.otherElements["events-home"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["reserve-e1"].waitForExistence(timeout: 3))
@@ -37,7 +37,7 @@ import XCTest
     func testCancelUsesInlineConfirmation() {
         let app = XCUIApplication()
         app.launchArguments = ["--preview-events"]
-        app.launch()
+        app.launchInForeground()
 
         XCTAssertTrue(app.otherElements["events-home"].waitForExistence(timeout: 5))
         // Reserve first so a cancel action appears.

@@ -8,7 +8,7 @@ import XCTest
     private func launch(_ extra: String...) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["--stub-backend", "--stub-signed-in"] + extra
-        app.launch()
+        app.launchInForeground()
         return app
     }
 

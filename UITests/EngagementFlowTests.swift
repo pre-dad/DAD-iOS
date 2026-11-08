@@ -8,7 +8,7 @@ import XCTest
     func testEngagementHomeRendersImpactAndBadges() {
         let app = XCUIApplication()
         app.launchArguments = ["--preview-engagement"]
-        app.launch()
+        app.launchInForeground()
 
         let home = app.otherElements["engagement-home"]
         XCTAssertTrue(home.waitForExistence(timeout: 5), "engagement home should appear")
@@ -24,7 +24,7 @@ import XCTest
     func testRankingOptOutHidesPosition() {
         let app = XCUIApplication()
         app.launchArguments = ["--preview-engagement"]
-        app.launch()
+        app.launchInForeground()
 
         XCTAssertTrue(app.otherElements["engagement-home"].waitForExistence(timeout: 5))
         // Starts opted-in: a national position is shown.
