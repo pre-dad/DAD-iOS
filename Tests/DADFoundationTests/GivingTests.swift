@@ -120,7 +120,10 @@ final class GivingModelTests: XCTestCase {
         let service = StubService(state: .none)
         let model = GivingModel(service: service)
         await model.applySelection()
-        guard case .failed = model.phase else { return XCTFail("expected failure") }
+        guard case .failed(let message) = model.phase else { return XCTFail("expected failure") }
+        XCTAssertFalse(message.isEmpty)
+        let changed = await service.changedTo
+        XCTAssertNil(changed, "no subscription means nothing is sent")
     }
 
     @MainActor
@@ -141,7 +144,8 @@ final class GivingModelTests: XCTestCase {
         await service.setFailNext(true)
         let model = GivingModel(service: service)
         await model.load()
-        guard case .failed = model.phase else { return XCTFail("expected failure") }
+        XCTAssertEqual(model.phase, .failed("Something went wrong. Please try again."))
+        XCTAssertFalse(model.hasLoaded)
     }
 }
 

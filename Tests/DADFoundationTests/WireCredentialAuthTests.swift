@@ -29,6 +29,8 @@ final class WireSignupTests: XCTestCase {
     func testSignupAcceptsAnyOlderServer2xxReply() async throws {
         let transport = ScriptedTransport { _, _ in (.accepted, #"{"message":"Check your email"}"#) }
         try await WireCredentialAuth(origin: testOrigin, transport: transport).requestSignup(form)
+        XCTAssertEqual(transport.seen.count, 1)
+        XCTAssertEqual(transport.seen.first?.request.path, "/donor/signup")
     }
 
     func testSignupStatusMapping() async {
@@ -130,7 +132,7 @@ final class WirePasswordSignInTests: XCTestCase {
     func testMalformedBodyIsAFailureNotASession() async {
         let transport = ScriptedTransport { _, _ in (.ok, "not json") }
         do { _ = try await WireCredentialAuth(origin: testOrigin, transport: transport).signIn(email: "a@b.co", password: "x"); XCTFail() }
-        catch { /* any thrown error is correct: no session was produced */ }
+        catch { assertBodyRejected(error) }
     }
 
     func testSignOutDuringPasswordSignInDiscardsTheLateResult() async throws {
@@ -158,7 +160,8 @@ final class WirePasswordSignInTests: XCTestCase {
         await gate.waitUntilEntered()
         signIn.cancel()
         await gate.release()
-        _ = try? await signIn.value
+        do { _ = try await signIn.value; XCTFail("a cancelled sign-in reported success") }
+        catch { XCTAssertTrue(error is CancellationError, "\(error)") }
         XCTAssertNil(try store.load(), "a cancelled sign-in must not persist credentials")
         XCTAssertEqual(store.saves, 0)
     }
@@ -169,12 +172,14 @@ final class WireOIDCTests: XCTestCase {
         for (provider, path) in [(OIDCProvider.apple, "/donor/oidc/apple/sign-in"), (.google, "/donor/oidc/google/sign-in")] {
             let transport = ScriptedTransport { _, _ in (.ok, nativeSessionJSON) }
             let credentials = try await WireCredentialAuth(origin: testOrigin, transport: transport, deviceName: "Alex’s iPhone")
-                .signIn(provider: provider, idToken: "header.payload.sig")
+                .signIn(provider: provider, idToken: "header.payload.sig", nonce: "raw-nonce-value")
             XCTAssertEqual(credentials.access, "A1")
             let call = try XCTUnwrap(transport.seen.first)
             XCTAssertEqual(call.request.path, path)
             XCTAssertNil(call.request.headerFields[.authorization])
             for fragment in ["header.payload.sig", "IOS", "Alex"] { XCTAssertTrue(call.body.contains(fragment), fragment) }
+            let json = try JSONSerialization.jsonObject(with: Data(call.body.utf8)) as? [String: Any]
+            XCTAssertEqual(json?["nonce"] as? String, "raw-nonce-value")
         }
     }
 
@@ -185,7 +190,7 @@ final class WireOIDCTests: XCTestCase {
         ]
         for (status, expected) in cases {
             let transport = ScriptedTransport { _, _ in (status, "{}") }
-            do { _ = try await WireCredentialAuth(origin: testOrigin, transport: transport).signIn(provider: .apple, idToken: "t"); XCTFail("\(status)") }
+            do { _ = try await WireCredentialAuth(origin: testOrigin, transport: transport).signIn(provider: .apple, idToken: "t", nonce: "n"); XCTFail("\(status)") }
             catch { XCTAssertEqual(error as? AccountError, expected, "\(status)") }
         }
     }
@@ -193,7 +198,16 @@ final class WireOIDCTests: XCTestCase {
     func testEmptyOrOversizeTokenNeverReachesTheWire() async {
         for token in ["", String(repeating: "a", count: 8193)] {
             let transport = ScriptedTransport { _, _ in (.ok, nativeSessionJSON) }
-            do { _ = try await WireCredentialAuth(origin: testOrigin, transport: transport).signIn(provider: .google, idToken: token); XCTFail() }
+            do { _ = try await WireCredentialAuth(origin: testOrigin, transport: transport).signIn(provider: .google, idToken: token, nonce: "n"); XCTFail() }
+            catch { XCTAssertEqual(error as? AccountError, .invalidInput) }
+            XCTAssertTrue(transport.seen.isEmpty)
+        }
+    }
+
+    func testEmptyOrOversizeNonceNeverReachesTheWire() async {
+        for nonce in ["", String(repeating: "n", count: 257)] {
+            let transport = ScriptedTransport { _, _ in (.ok, nativeSessionJSON) }
+            do { _ = try await WireCredentialAuth(origin: testOrigin, transport: transport).signIn(provider: .apple, idToken: "t", nonce: nonce); XCTFail() }
             catch { XCTAssertEqual(error as? AccountError, .invalidInput) }
             XCTAssertTrue(transport.seen.isEmpty)
         }
@@ -201,7 +215,7 @@ final class WireOIDCTests: XCTestCase {
 
     func testBrowserShapedBodyIsNeverASession() async {
         let transport = ScriptedTransport { _, _ in (.ok, #"{"signed_in":true}"#) }
-        do { _ = try await WireCredentialAuth(origin: testOrigin, transport: transport).signIn(provider: .apple, idToken: "t"); XCTFail() }
+        do { _ = try await WireCredentialAuth(origin: testOrigin, transport: transport).signIn(provider: .apple, idToken: "t", nonce: "n"); XCTFail() }
         catch { XCTAssertEqual(error as? AccountError, .invalidResponse) }
     }
 }

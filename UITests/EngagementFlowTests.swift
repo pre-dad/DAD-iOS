@@ -1,6 +1,6 @@
 import XCTest
 
-/// Phase D — the donor engagement home. Launches straight into the signed-in engagement
+/// The donor engagement home. Launches straight into the signed-in engagement
 /// screen (a dedicated preview arg that doesn't disturb the other donor tests) and exercises
 /// impact, the badges summary, and the rankings opt-out toggle (which renders inline — no OS
 /// action sheet — so it is deterministic under XCUITest).
@@ -8,7 +8,7 @@ import XCTest
     func testEngagementHomeRendersImpactAndBadges() {
         let app = XCUIApplication()
         app.launchArguments = ["--preview-engagement"]
-        app.launch()
+        app.launchInForeground()
 
         let home = app.otherElements["engagement-home"]
         XCTAssertTrue(home.waitForExistence(timeout: 5), "engagement home should appear")
@@ -24,7 +24,7 @@ import XCTest
     func testRankingOptOutHidesPosition() {
         let app = XCUIApplication()
         app.launchArguments = ["--preview-engagement"]
-        app.launch()
+        app.launchInForeground()
 
         XCTAssertTrue(app.otherElements["engagement-home"].waitForExistence(timeout: 5))
         // Starts opted-in: a national position is shown.

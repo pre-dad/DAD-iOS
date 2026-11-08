@@ -9,8 +9,8 @@ import XCTest
     private func launch() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["--stub-backend"]
-        app.launch()
-        // Phase D: Welcome's "I already give — sign in" reaches the sign-in methods.
+        app.launchInForeground()
+        // Welcome's "I already give — sign in" reaches the sign-in methods.
         XCTAssertTrue(app.buttons["I already give — sign in"].waitForExistence(timeout: 15))
         app.buttons["I already give — sign in"].tap()
         return app
@@ -26,7 +26,7 @@ import XCTest
     }
 
     private func signInWithPassword(_ app: XCUIApplication, password: String) {
-        // Phase D: password lives under the "More options" disclosure.
+        // Password lives under the "More options" disclosure.
         app.buttons["More options"].tap()
         app.buttons["Sign in with email & password"].tap()
         type("alex@example.org", into: app.textFields["Email"], in: app)
@@ -55,12 +55,8 @@ import XCTest
         XCTAssertFalse(app.buttons["open-settings"].exists)
 
         let paste = app.textFields["Paste your sign-in link"]
-        // A center tap places the caret inside the short invalid URL; tap its trailing whitespace instead.
-        paste.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
-        paste.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: "https://example.com/not-ours".count))
-        XCTAssertEqual(paste.value as? String, "Paste your sign-in link")
         let signupLink = stubClaimLink + "&next=/account/dashboard"
-        paste.typeText(signupLink)
+        paste.replaceText(with: signupLink, in: app)
         XCTAssertEqual(paste.value as? String, signupLink)
         app.buttons["signup-continue"].tap()
 
@@ -115,16 +111,13 @@ import XCTest
         XCTAssertTrue(app.otherElements["settings-screen"].exists, "a typo must not end the session")
         XCTAssertFalse(app.staticTexts["settings-signed-out"].exists)
 
-        let current = app.secureTextFields["password-current"]
-        current.tap()
-        current.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 20))
-        current.typeText("correct horse battery")
+        app.secureTextFields["password-current"].replaceText(with: "correct horse battery", in: app)
         app.buttons["password-save"].tap()
         XCTAssertTrue(app.staticTexts["password-saved"].waitForExistence(timeout: 10))
     }
 
     func testAppleGooglePasskeyAreHiddenWithAnExplanationWhenUnconfigured() {
-        // Phase D: unavailable methods are no longer listed as disabled rows — they are hidden, with an
+        // Unavailable methods are no longer listed as disabled rows — they are hidden, with an
         // honest note that the build can't offer them. Phone (primary) and email (secondary) stay.
         let app = launch()
         XCTAssertTrue(app.buttons["Continue with phone"].waitForExistence(timeout: 10))

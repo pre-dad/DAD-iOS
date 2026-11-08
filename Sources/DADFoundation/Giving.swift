@@ -12,6 +12,11 @@ public struct GiftAmount: Sendable, Equatable, Hashable, Comparable {
     /// Monthly charge in integer USD cents (dailyDollars × 30 × 100 == dailyDollars × 3000).
     public var monthlyMinor: Int { dailyDollars * Self.centsPerDailyDollar }
 
+    /// The $1/day floor, for callers that need a starting amount without handling the failable initializers.
+    public static let minimum = GiftAmount(uncheckedDailyDollars: minDailyDollars)
+
+    private init(uncheckedDailyDollars: Int) { dailyDollars = uncheckedDailyDollars }
+
     public static let minDailyDollars = 1
     public static let maxDailyDollars = 30
     /// A daily dollar maps to this many monthly cents: $1/day → $30/month → 3000¢.
@@ -43,8 +48,6 @@ public struct GiftAmount: Sendable, Equatable, Hashable, Comparable {
     public var monthlyLabel: String { "$\(monthlyMinor / 100)/mo" }
 }
 
-/// Format an integer-cents USD figure as "$12.34" / "$150". Whole-dollar amounts drop the
-/// decimals; this is display-only and never used for arithmetic.
 /// Format an integer-cents USD figure as "$12.34" / "$150" / "$1,240". Whole-dollar amounts drop
 /// the decimals; thousands are grouped for readability (WCAG). Display-only, never used for
 /// arithmetic. The formatter is pinned to en_US_POSIX so grouping is stable regardless of host
@@ -165,6 +168,6 @@ public enum CancelCopy {
         formatter.dateStyle = .medium
         formatter.timeStyle = .none
         let date = formatter.string(from: periodEnd)
-        return "Your gift stays active until \(date). After that it won't renew and your streak ends."
+        return "Your gift stays active until \(date). After that it won’t renew and your streak ends."
     }
 }

@@ -24,14 +24,7 @@ struct EventsScreen: View {
     @State var model: EventsModel
     let service: any EventsService
     var onSignedOut: () -> Void = {}
-    @State private var selected: String? = {
-        #if DEBUG
-        // Screenshot/UITest aid, DEBUG only: open straight onto one event's detail.
-        ProcessInfo.processInfo.arguments.first { $0.hasPrefix("--stub-event-detail=") }.map { String($0.dropFirst("--stub-event-detail=".count)) }
-        #else
-        nil
-        #endif
-    }()
+    @State private var selected: String? = launchValue("--stub-event-detail")
     @State private var confirmingCancel: String?
 
     var body: some View {
@@ -48,12 +41,10 @@ struct EventsScreen: View {
         .tint(Color.dad("brand-ink"))
         .task {
             await model.load()
-            #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("--stub-auto-calendar"), let selected { await model.prepareCalendar(eventID: selected) }
-            #endif
+            if launchFlag("--stub-auto-calendar"), let selected { await model.prepareCalendar(eventID: selected) }
         }
         .onChange(of: model.signedOut) { _, signedOut in if signedOut { onSignedOut() } }
-        // Phase F: success haptic when a seat is reserved / waitlisted.
+        // Success haptic when a seat is reserved / waitlisted.
         .sensoryFeedback(.success, trigger: model.lastOutcome)
         .sheet(item: calendarBinding) { file in
             ShareSheet(url: file.url, onDone: { model.clearCalendar() }).ignoresSafeArea()
@@ -117,7 +108,7 @@ private struct EventHeader: View {
     let event: DonorEvent
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
-            Text(event.title).font(.headline)
+            Text(event.title).font(.headline).accessibilityAddTraits(.isHeader)
             if event.isInviteOnly {
                 Text("Invite-only").font(.caption2).padding(.horizontal, 6).padding(.vertical, 2)
                     .background(Color.dad("brand-ink").opacity(0.12)).clipShape(Capsule())
@@ -133,7 +124,7 @@ private struct EventActions: View {
     let model: EventsModel
     let event: DonorEvent
     @Binding var confirmingCancel: String?
-    /// Phase G: Reserve is the single primary on the DETAIL screen; in a list row it's secondary.
+    /// Reserve is the single primary on the DETAIL screen; in a list row it's secondary.
     var isDetail: Bool = false
 
     var body: some View {
@@ -169,7 +160,7 @@ private struct EventActions: View {
     }
 
     @ViewBuilder private func held(now: Date) -> some View {
-        Text(event.status == .waitlisted ? "On the waitlist" : "You're going").font(.subheadline.bold())
+        Text(event.status == .waitlisted ? "On the waitlist" : "You’re going").font(.subheadline.bold())
             .accessibilityIdentifier("status-\(event.id)")
         if event.canCancel(now: now) {
             if confirmingCancel == event.id {

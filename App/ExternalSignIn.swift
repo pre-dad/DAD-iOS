@@ -56,14 +56,14 @@ private final class AuthorizationRun: NSObject, ASAuthorizationControllerDelegat
 /// `com.apple.developer.applesignin`) on a signed build; without it the request fails and the
 /// model reports the method as unavailable on this device.
 struct AppleIDTokenProvider: IDTokenProvider {
-    func idToken() async throws -> String {
-        try await appleIDToken()
+    func idToken(nonce: OIDCNonce) async throws -> String {
+        try await appleIDToken(nonce: nonce)
     }
 }
 
-@MainActor private func appleIDToken() async throws -> String {
+@MainActor private func appleIDToken(nonce: OIDCNonce) async throws -> String {
     let run = AuthorizationRun()
-    return try await run.fetch()
+    return try await run.fetch(nonce: nonce)
 }
 
 @MainActor private func passkeyAssertion(relyingParty: String, challenge: Data) async throws -> PasskeyAssertion {
@@ -72,9 +72,10 @@ struct AppleIDTokenProvider: IDTokenProvider {
 }
 
 private extension AuthorizationRun {
-    func fetch() async throws -> String {
+    func fetch(nonce: OIDCNonce) async throws -> String {
         let request = ASAuthorizationAppleIDProvider().createRequest()
         request.requestedScopes = [.email]
+        request.nonce = nonce.hashed
         let authorization = try await perform([request])
         guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
               let data = credential.identityToken, let token = String(data: data, encoding: .utf8), !token.isEmpty else {
@@ -110,9 +111,9 @@ private extension AuthorizationRun {
     }
 }
 
-/// No Google id_token provider is linked into this build (the official SDK is a new dependency
-/// the project has not adopted), so Google sign-in is never switched on; this keeps the code path
-/// complete and honest if a build were ever to route here.
-struct UnavailableIDTokenProvider: IDTokenProvider {
-    func idToken() async throws -> String { throw ExternalSignInError.unsupported }
+/// The Google id_token provider, or nil while none is linked into this build (the official SDK is a new
+/// dependency the project has not adopted). Google sign-in is offered only when this returns a provider,
+/// so linking one here switches the button on once the client id is configured.
+enum GoogleSignIn {
+    static var provider: (any IDTokenProvider)? { nil }
 }

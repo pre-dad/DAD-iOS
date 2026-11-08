@@ -6,11 +6,21 @@ import UserNotifications
 
 /// Preview/UITest launch switches exist only in DEBUG builds: a release binary ignores them, so a
 /// shipped app can never be steered into synthetic data or a canned screen by launch arguments.
-private func launchFlag(_ name: String) -> Bool {
+func launchFlag(_ name: String) -> Bool {
     #if DEBUG
     ProcessInfo.processInfo.arguments.contains(name)
     #else
     false
+    #endif
+}
+
+/// The value of a `--name=value` launch argument, DEBUG only.
+func launchValue(_ name: String) -> String? {
+    #if DEBUG
+    let prefix = name + "="
+    return ProcessInfo.processInfo.arguments.first { $0.hasPrefix(prefix) }.map { String($0.dropFirst(prefix.count)) }
+    #else
+    nil
     #endif
 }
 
@@ -230,7 +240,8 @@ final class AccountModel {
                 let capabilities = SignInCapabilities(config: SignInConfig(
                     appleFlag: Bundle.main.object(forInfoDictionaryKey: "DADAppleSignInEnabled") as? String,
                     googleClientID: Bundle.main.object(forInfoDictionaryKey: "DADGoogleClientID") as? String,
-                    passkeyRelyingParty: Bundle.main.object(forInfoDictionaryKey: "DADPasskeyRelyingParty") as? String))
+                    passkeyRelyingParty: Bundle.main.object(forInfoDictionaryKey: "DADPasskeyRelyingParty") as? String),
+                    googleProviderAvailable: GoogleSignIn.provider != nil)
                 kit = SignInKit(phone: auth, signup: credentialAuth, link: credentialAuth, password: credentialAuth,
                                 oidc: capabilities.apple || capabilities.google ? credentialAuth : nil,
                                 passkey: capabilities.passkey ? credentialAuth : nil, capabilities: capabilities,
@@ -395,10 +406,8 @@ private struct WebFallback: UIViewControllerRepresentable {
 }
 
 #if DEBUG
-/// Preview sign-in transport — returns a handle and preview credentials so the auth journey
-/// runs in the simulator with no backend. The wire implementation replaces this once the
-/// phone/OIDC endpoints are consumed; the screens bind to the protocol, not this type.
-// Internal (not file-private) so SignInKit.preview in the extracted App/Welcome.swift can see it.
+/// Preview sign-in transport: returns a handle and preview credentials so the auth journey runs in
+/// the simulator with no backend. Internal rather than private because `SignInKit.preview` uses it.
 actor PreviewSignIn: SignInService, SignupService, SignInLinkService, PasswordSignInService {
     func requestSignup(_ form: SignupForm) async throws { try await Task.sleep(for: .milliseconds(150)) }
     func requestSignInLink(email: String) async throws { try await Task.sleep(for: .milliseconds(150)) }
@@ -418,9 +427,7 @@ actor PreviewSignIn: SignInService, SignupService, SignInLinkService, PasswordSi
 #endif
 
 #if DEBUG
-/// Preview giving transport — an in-memory recurring gift so the Phase C giving journey runs
-/// in the simulator with no backend. The wire implementation (mapping the generated giving
-/// client) replaces this; the screens bind to the `GivingService` protocol, not this type.
+/// Preview giving transport: an in-memory recurring gift so the giving journey runs in the simulator with no backend.
 private actor PreviewGiving: GivingService {
     private var state: RecurringState
     init(state: RecurringState = .active(subscriptionID: "preview-sub", amountMinor: 3000, periodEnd: Date().addingTimeInterval(14 * 86_400))) {
@@ -483,8 +490,6 @@ private actor PreviewEngagement: EngagementService {
     }
 }
 #endif
-
-// MARK: - Events preview + screen (Phase E)
 
 #if DEBUG
 /// Preview double for the events service. One reservable public event, one full event (waitlist),
@@ -633,7 +638,7 @@ private actor PreviewAccountSettings: AccountSettingsService {
         pushStreakAtRisk: true, pushStreakMilestone: true, pushStreakLapsed: true,
         pushBadgeEarned: true, pushEventNearby: false, pushEventReminder: true,
         pushEventPromoted: false, pushGiftProcessed: true, rankingsOptedOut: false,
-        networkVisible: true, volunteer: true)
+        networkVisible: true, volunteer: true, volunteerInterests: ["Food drives"])
 
     private func snapshot() -> AccountSettingsSnapshot {
         AccountSettingsSnapshot(
@@ -652,7 +657,7 @@ private actor PreviewAccountSettings: AccountSettingsService {
             pushEventNearby: preferences.pushEventNearby, pushEventReminder: preferences.pushEventReminder,
             pushEventPromoted: preferences.pushEventPromoted, pushGiftProcessed: preferences.pushGiftProcessed,
             rankingsOptedOut: preferences.rankingsOptedOut, networkVisible: preferences.networkVisible,
-            volunteer: preferences.volunteer)
+            volunteer: preferences.volunteer, volunteerInterests: preferences.volunteerInterests)
         return snapshot()
     }
     func deleteAccount() async throws {}

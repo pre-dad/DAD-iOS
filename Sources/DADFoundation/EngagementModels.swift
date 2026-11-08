@@ -218,11 +218,11 @@ public final class ScanModel {
     /// is rejected so a stray QR can't be mistaken for an invite.
     public func ingest(_ scanned: String) {
         guard let payload = QRPayload.decode(scanned) else {
-            phase = .failed("That didn't scan. Try again.")
+            phase = .failed("That didn’t scan. Try again.")
             return
         }
         guard let code = payload.referralCode else {
-            phase = .failed("That QR code isn't a Dollar A Day invite.")
+            phase = .failed("That QR code isn’t a Dollar A Day invite.")
             return
         }
         phase = .resolved(code)

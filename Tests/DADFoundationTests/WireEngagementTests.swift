@@ -286,11 +286,11 @@ final class WireEngagementTests: XCTestCase {
         let padding = String(repeating: "a", count: 1_100_000)
         for body in [#"{"badges":[{"code":"F"}]}"#, "<html>", #"{"badges":"nope"}"#, #"{"badges":[],"pad":""# + padding + #""}"#] {
             let rig = try make(engagementTransport(badges: (.ok, body)))
-            do { _ = try await rig.service.badges(); XCTFail(String(body.prefix(40))) } catch {}
+            do { _ = try await rig.service.badges(); XCTFail(String(body.prefix(40))) } catch { assertBodyRejected(error) }
         }
         for body in [#"{"active_count":"x"}"#, "{}", #"{"active_count":1,"annualized_minor":1,"next_milestone":null,"invitees":[{"name":"A"}],"anonymous_active":0}"#] {
             let rig = try make(engagementTransport(network: (.ok, body)))
-            do { _ = try await rig.service.network(); XCTFail(body) } catch {}
+            do { _ = try await rig.service.network(); XCTFail(body) } catch { assertBodyRejected(error) }
         }
     }
 
@@ -478,7 +478,7 @@ final class WireEngagementTests: XCTestCase {
         }
         for body in ["<html>", #"{"initiative_id":"x"}"#, "{}"] {
             let rig = try make(ScriptedTransport { _, _ in (.ok, body) })
-            do { _ = try await rig.service.initiativeSpend(id: initiativeID); XCTFail(body) } catch {}
+            do { _ = try await rig.service.initiativeSpend(id: initiativeID); XCTFail(body) } catch { assertBodyRejected(error) }
         }
     }
 

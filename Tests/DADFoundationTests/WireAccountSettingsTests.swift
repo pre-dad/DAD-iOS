@@ -41,6 +41,32 @@ final class WireAccountSettingsTests: XCTestCase {
         XCTAssertEqual(sent["rankings_opted_out"] as? Bool, false)
     }
 
+    func testInterestsAreReadAndSentOnlyOnceEdited() async throws {
+        let withInterests = profileJSON().replacingOccurrences(of: #""volunteer_interests":[]"#, with: #""volunteer_interests":["Food drives","Tutoring"]"#)
+        let transport = ScriptedTransport { _, _ in (.ok, withInterests) }
+        let rig = try make(transport)
+        let current = try await rig.settings.load().preferences
+        XCTAssertEqual(current.volunteerInterests, ["Food drives", "Tutoring"])
+
+        _ = try await rig.settings.savePreferences(current.with("marketing_emails", true))
+        let untouched = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(try XCTUnwrap(transport.calls(to: "/donor/me/preferences").first).body.utf8)) as? [String: Any])
+        XCTAssertNil(untouched["volunteer_interests"], "untouched interests are omitted so the server keeps them")
+
+        let edited = try current.addingInterest("Mentoring").get()
+        _ = try await rig.settings.savePreferences(edited)
+        let sentBody = try XCTUnwrap(transport.calls(to: "/donor/me/preferences").last).body
+        let sent = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(sentBody.utf8)) as? [String: Any])
+        XCTAssertEqual(sent["volunteer_interests"] as? [String], ["Food drives", "Tutoring", "Mentoring"])
+    }
+
+    func testStaleInterestSaveSurfacesAsRetryableAndKeepsNothingLocal() async throws {
+        let transport = ScriptedTransport { seen, _ in seen.request.method == .post ? (.conflict, "{}") : (.ok, profileJSON()) }
+        let rig = try make(transport)
+        let current = try await rig.settings.load().preferences
+        do { _ = try await rig.settings.savePreferences(try current.addingInterest("Tutoring").get()); XCTFail() }
+        catch { XCTAssertEqual(error as? AccountError, .unavailable) }
+    }
+
     func testDeleteWipesCredentialsAndLocalDataWithoutALogoutCall() async throws {
         let transport = ScriptedTransport { _, _ in (.ok, #"{"deleted":true}"#) }
         let rig = try make(transport)

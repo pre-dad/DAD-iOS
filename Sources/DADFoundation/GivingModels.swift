@@ -80,7 +80,7 @@ public final class GivingModel {
     private let pollAttempts: Int
     private let pollDelay: Duration
 
-    public init(service: any GivingService, initial: GiftAmount = GiftAmount(dailyDollars: 1)!,
+    public init(service: any GivingService, initial: GiftAmount = .minimum,
                 pollAttempts: Int = 5, pollDelay: Duration = .seconds(2)) {
         self.service = service
         self.selection = initial

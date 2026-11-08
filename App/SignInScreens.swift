@@ -28,8 +28,7 @@ struct NotificationPermissionRow: View {
     }
 }
 
-/// Presents the analytics question as a small sheet once, right after first sign-in (Phase D moved it
-/// off the Welcome screen). Same two options/copy and the same identifiers; dismisses once answered.
+/// Presents the analytics question as a small sheet once, right after first sign-in. Same two options/copy and the same identifiers; dismisses once answered.
 struct AnalyticsChoiceSheet: View {
     @Bindable var analytics: AnalyticsController
     let onDone: () -> Void

@@ -8,12 +8,12 @@ import XCTest
     private func launch(_ extra: String...) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["--stub-backend", "--stub-signed-in"] + extra
-        app.launch()
+        app.launchInForeground()
         return app
     }
 
     private func openEngagement(_ app: XCUIApplication) {
-        // Phase B: engagement is the Circle tab, not a card/sheet on Home.
+        // Engagement is the Circle tab, not a card/sheet on Home.
         let circle = app.tabBars.buttons["Circle"]
         XCTAssertTrue(circle.waitForExistence(timeout: 20))
         circle.tap()
@@ -160,7 +160,7 @@ import XCTest
         XCTAssertTrue(app.staticTexts["spend-row-0"].label.contains("Food"), app.staticTexts["spend-row-0"].label)
         XCTAssertTrue(app.staticTexts["spend-row-0"].label.contains("$900"), app.staticTexts["spend-row-0"].label)
         XCTAssertTrue(app.staticTexts["spend-row-1"].label.contains("Delivery"))
-        // Phase B: spend is a push from Home; return with the navigation back button.
+        // Spend is a push from Home; return with the navigation back button.
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(app.staticTexts["initiative-title"].waitForExistence(timeout: 5))
     }

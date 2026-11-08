@@ -341,18 +341,35 @@ final class SignInCapabilityTests: XCTestCase {
     }
 }
 
-private struct FakeTokens: IDTokenProvider {
+private final class FakeTokens: IDTokenProvider, @unchecked Sendable {
     let result: Result<String, Error>
-    func idToken() async throws -> String { try result.get() }
+    private let lock = NSLock()
+    private var seen: [OIDCNonce] = []
+    var nonces: [OIDCNonce] { lock.withLock { seen } }
+    init(result: Result<String, Error>) { self.result = result }
+    func idToken(nonce: OIDCNonce) async throws -> String {
+        lock.withLock { seen.append(nonce) }
+        return try result.get()
+    }
+}
+
+private struct SequenceNonces: NonceGenerator {
+    private let counter = Counter()
+    final class Counter: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value = 0
+        func next() -> Int { lock.withLock { value += 1; return value } }
+    }
+    func make() -> OIDCNonce { OIDCNonce(raw: "raw-nonce-\(counter.next())") }
 }
 
 private final class FakeOIDC: OIDCSignInService, @unchecked Sendable {
     private let lock = NSLock()
-    private var seen: [(OIDCProvider, String)] = []
+    private var seen: [(OIDCProvider, String, String)] = []
     var result: Result<Credentials, Error> = .success(Credentials(access: "A", refresh: "R", expiresAt: .distantFuture))
-    var calls: [(OIDCProvider, String)] { lock.withLock { seen } }
-    func signIn(provider: OIDCProvider, idToken: String) async throws -> Credentials {
-        lock.withLock { seen.append((provider, idToken)) }
+    var calls: [(OIDCProvider, String, String)] { lock.withLock { seen } }
+    func signIn(provider: OIDCProvider, idToken: String, nonce: String) async throws -> Credentials {
+        lock.withLock { seen.append((provider, idToken, nonce)) }
         return try result.get()
     }
 }
@@ -367,6 +384,27 @@ private final class FakeOIDC: OIDCSignInService, @unchecked Sendable {
         XCTAssertEqual(service.calls.first?.1, "jwt")
     }
 
+    func testProviderGetsTheNonceAndTheServerGetsTheRawValue() async throws {
+        let service = FakeOIDC(), tokens = FakeTokens(result: .success("jwt"))
+        let model = OIDCSignInModel(provider: .apple, tokens: tokens, service: service, nonces: SequenceNonces(), establish: establishDirectly)
+        await model.start()
+        let bound = try XCTUnwrap(tokens.nonces.first)
+        XCTAssertEqual(bound.raw, "raw-nonce-1")
+        XCTAssertEqual(service.calls.first?.2, "raw-nonce-1")
+        XCTAssertEqual(bound.hashed, OIDCNonce(raw: "raw-nonce-1").hashed)
+        XCTAssertNotEqual(bound.hashed, bound.raw)
+    }
+
+    func testEveryAttemptIncludingARetryAfterFailureDrawsAFreshNonce() async {
+        let service = FakeOIDC(), tokens = FakeTokens(result: .success("jwt"))
+        service.result = .failure(AccountError.unavailable)
+        let model = OIDCSignInModel(provider: .apple, tokens: tokens, service: service, nonces: SequenceNonces(), establish: establishDirectly)
+        await model.start()
+        await model.start()
+        XCTAssertEqual(tokens.nonces.map(\.raw), ["raw-nonce-1", "raw-nonce-2"])
+        XCTAssertEqual(service.calls.map(\.2), ["raw-nonce-1", "raw-nonce-2"])
+    }
+
     func testCancellingThePlatformSheetIsQuietNotAnError() async {
         let service = FakeOIDC()
         for error in [ExternalSignInError.cancelled as Error, CancellationError()] {
@@ -374,6 +412,16 @@ private final class FakeOIDC: OIDCSignInService, @unchecked Sendable {
             await model.start()
             XCTAssertEqual(model.phase, .idle)
         }
+        XCTAssertTrue(service.calls.isEmpty)
+    }
+
+    func testCancellationLeavesNoNonceSentToTheServerAndRetryDrawsANewOne() async {
+        let service = FakeOIDC()
+        let cancelled = FakeTokens(result: .failure(ExternalSignInError.cancelled))
+        let model = OIDCSignInModel(provider: .apple, tokens: cancelled, service: service, nonces: SequenceNonces(), establish: establishDirectly)
+        await model.start()
+        await model.start()
+        XCTAssertEqual(cancelled.nonces.map(\.raw), ["raw-nonce-1", "raw-nonce-2"])
         XCTAssertTrue(service.calls.isEmpty)
     }
 

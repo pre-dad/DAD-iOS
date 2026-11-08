@@ -67,7 +67,12 @@ public actor AccountSession {
 
     public init(api: any AccountAPI, store: any CredentialStore) throws {
         self.api = api; self.store = store
-        let stored = try store.load()
+        let stored: Credentials?
+        do { stored = try store.load() }
+        catch is DecodingError {
+            try store.clear()
+            stored = nil
+        }
         self.credentials = stored
         self.restoredCredentials = stored != nil
     }

@@ -17,12 +17,12 @@ import XCTest
     private func launch(_ extra: String...) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["--stub-backend", "--stub-signed-in"] + extra
-        app.launch()
+        app.launchInForeground()
         return app
     }
 
     private func openEvents(_ app: XCUIApplication) {
-        // Phase B: events is the Events tab, not a card/sheet on Home.
+        // Events is the Events tab, not a card/sheet on Home.
         let events = app.tabBars.buttons["Events"]
         XCTAssertTrue(events.waitForExistence(timeout: 20))
         events.tap()
@@ -47,7 +47,7 @@ import XCTest
 
         app.buttons["reserve-\(park)"].tap()
         XCTAssertTrue(app.staticTexts["reserve-confirm"].waitForExistence(timeout: 10))
-        XCTAssertEqual(app.staticTexts["reserve-confirm"].label, "You're going")
+        XCTAssertEqual(app.staticTexts["reserve-confirm"].label, "You’re going")
         XCTAssertTrue(app.staticTexts["status-\(park)"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["spots-\(park)"].label, "7 spots left")
 
@@ -69,7 +69,7 @@ import XCTest
         XCTAssertTrue(join.exists)
         join.tap()
         XCTAssertTrue(app.staticTexts["reserve-confirm"].waitForExistence(timeout: 10))
-        XCTAssertEqual(app.staticTexts["reserve-confirm"].label, "You're on the waitlist")
+        XCTAssertEqual(app.staticTexts["reserve-confirm"].label, "You’re on the waitlist")
         XCTAssertEqual(app.staticTexts["status-\(foodBank)"].label, "On the waitlist")
     }
 

@@ -21,7 +21,7 @@ builds compile out every preview double and ignore `--preview-*` launch argument
 unconfigured Release build shows the unavailable state instead of sample data.
 Run `bash scripts/check-ios.sh` for contract verification, Swift unit tests, and simulator
 journeys. `DAD_SIMULATOR_ID`, `DAD_SWIFT_BUILD`, and `DAD_XCODE_BUILD` override the simulator
-and disposable build paths. Unit tests alone: `swift test --scratch-path /tmp/dad-ios-swift` (add `--disable-sandbox`
+and disposable build paths. Unit tests alone: `swift test --scratch-path ~/.cache/dad-ios-swift` (add `--disable-sandbox`
 when running inside a tool that already sandboxes processes).
 
 CI executes that same script. The pinned Apple generator plugin is trusted explicitly
@@ -30,7 +30,7 @@ AppIntents metadata-extraction diagnostic is not suppressed; this app defines no
 
 ## Shared contract and native boundaries
 
-`foundation.lock.json` pins mobile foundation 2.11.0 and its manifest digest. The vendored
+`foundation.lock.json` pins mobile foundation 2.12.0 and its manifest digest. The vendored
 release is verified before generation. `prepare-client.mjs` copies the Swift generator input, null-only Codable adapter, tokens,
 and link policy into ignored generator inputs. Apple's pinned Swift generator produces
 types and a client during the build, scoped to profile, claim, refresh, and logout.
@@ -90,7 +90,8 @@ invented or committed; supply, per method:
 
 - **Sign in with Apple:** a signing team, the "Sign in with Apple" capability
   (`com.apple.developer.applesignin` entitlement) on the app ID, then build setting
-  `DAD_APPLE_SIGNIN_ENABLED=YES`. DAD-Main must also have Apple configured (`oidcSignIn` is 503 otherwise).
+  `DAD_APPLE_SIGNIN_ENABLED=YES`. DAD-Main must also have Apple configured (`oidcSignIn` is 503 otherwise). Each attempt binds a fresh
+  random nonce: Apple receives its SHA-256 hex, DAD-Main receives the raw value.
 - **Passkeys:** the Associated Domains capability on the app ID with `DAD_ASSOCIATED_DOMAIN=<domain>` (the
   entitlement's `webcredentials:` entry), an `apple-app-site-association` file for that domain listing the final
   bundle ID, and build setting `DAD_PASSKEY_RP_ID=<domain>` (bare hostname, the relying-party ID DAD-Main uses).
@@ -256,6 +257,9 @@ checklist; they cannot run on the CI simulator:
 - [ ] Performance on a throttled network: dashboards < 2s, checkout < 60s (PRD §10).
 - [ ] Real-device APNs delivery; Apple Pay or the Stripe web handoff end-to-end.
 - [ ] Universal-link + deferred-attribution acceptance on a clean install.
+- [ ] Offline and flaky-network walk (airplane mode mid-checkout, mid-sign-in, mid-reservation) on device.
+- [ ] Certificate handling: the app relies on system trust with ATS defaults (no exceptions, HTTPS-only origin
+      check); decide before launch whether DAD wants pinning, which is an operational burden on cert rotation.
 - [ ] Confirm `App/PrivacyInfo.xcprivacy` (collected data types, UserDefaults reason `CA92.1`) matches the
       final App Store privacy answers before submission; counsel owns the disclosure wording.
 
@@ -274,13 +278,30 @@ exercised only at archive/submission time. Pre-submission:
       team id) — gitignored, not committed.
 - [ ] Verify the archived build is signed with the distribution certificate before upload.
 
+## Scale (50,000 users now, 1,000,000 within a year)
+
+- **Nothing polls.** Screens read on open and on explicit refresh; there are no timers hitting the API. The one
+  bounded re-read loop runs after the hosted checkout sheet closes. A cold launch costs a profile read, the
+  dashboard and today's initiative reads, and one push-device registration; steady state is a handful of requests
+  per user per day.
+- **Retries cannot storm.** Authenticated reads retry at most once after a 401 (single-flight refresh, so N
+  concurrent calls make one refresh request). Idempotent commands reuse their key on a retry and honor
+  `Retry-After`. Analytics back off exponentially and are capped at 500 buffered events.
+- **Payloads are bounded.** Responses are capped at 1 MiB, gift history pages at 50 rows (500 in memory), analytics
+  batches at 100 events.
+- **Server-side pressure to plan for.** A push-driven open (an event reminder to all attendees) arrives within
+  seconds, so the dashboard, initiative and registration endpoints need headroom for a launch-minute burst; the
+  push sender should jitter or batch sends. Client requests carry no jitter on launch; add server-side
+  rate limiting and cache the public initiative read at the edge.
+
 ## Analytics and push (contract 2.9.0)
 
 **Analytics are opt-in**, worded and counted as on the website. The start screen asks once ("Allow usage
 analytics?") and Settings has a "Usage analytics" switch; until the donor allows it nothing is recorded. Events go
 only to DAD-Main's `ingestAnalytics` (first party, `X-DAD-Platform: IOS`, attributed to the donor when signed in)
 through `AnalyticsRecorder`, in batches of up to 100 with a stable id each so a retried batch is not double-counted;
-declining drops anything still buffered. The app emits `app_opened`, `role_selected`, `invite_shared`
+declining drops anything still buffered. Offline, at most 500 events are kept (oldest dropped), and after a failed
+upload new events do not retry until an exponential backoff (30 s doubling to 15 min) has passed. The app emits `app_opened`, `role_selected`, `invite_shared`
 (`share_sheet` / `copy`), `irl_code_shown` and `push_opened`; every other event is derived from the successful API
 call it stands for by the same rules as the website's `observeAPI` (`ObservingTransport`), e.g. `signup_started`
 for `POST /donor/signup`.

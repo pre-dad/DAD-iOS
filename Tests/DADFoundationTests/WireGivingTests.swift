@@ -94,10 +94,10 @@ final class WireGivingTests: XCTestCase {
 
     func testMalformedAndOversizeBodiesThrow() async throws {
         let bad = try make(ScriptedTransport { _, _ in (.ok, #"{"mode":"test","subscription":{"amount_minor":"lots"}}"#) })
-        do { _ = try await bad.service.recurring(); XCTFail() } catch {}
+        do { _ = try await bad.service.recurring(); XCTFail() } catch { assertBodyRejected(error) }
         let padding = String(repeating: "a", count: 1_100_000)
         let big = try make(ScriptedTransport { _, _ in (.ok, #"{"mode":"test","subscription":null,"pad":""# + padding + #""}"#) })
-        do { _ = try await big.service.recurring(); XCTFail() } catch {}
+        do { _ = try await big.service.recurring(); XCTFail() } catch { assertBodyRejected(error) }
     }
 
     func testRecurring401RefreshesOnceThenSucceeds() async throws {
@@ -259,7 +259,7 @@ final class WireGivingTests: XCTestCase {
         // Success status but a body that does not decode: the outcome is unknown, so the key survives.
         let transport = amountServer { _, index in index < 2 ? (.ok, #"{"oops":1}"#) : (.ok, amountChangeJSON()) }
         let rig = try make(transport)
-        do { _ = try await rig.service.changeAmount(subscriptionID: subID, to: 30000); XCTFail() } catch {}
+        do { _ = try await rig.service.changeAmount(subscriptionID: subID, to: 30000); XCTFail() } catch { assertBodyRejected(error) }
         _ = try await rig.service.changeAmount(subscriptionID: subID, to: 30000)
         let posts = transport.calls(to: "/donor/me/recurring/amount").filter { $0.request.method == .post }
         XCTAssertEqual(idempotencyKey(posts[0]), idempotencyKey(posts[1]))
@@ -306,7 +306,7 @@ final class WireGivingTests: XCTestCase {
         let transport = ScriptedTransport { _, index in index == 0 ? (.serviceUnavailable, "{}") : (.ok, recurringJSON(stopsAt: periodEndText)) }
         let rig = try make(transport)
         let period = Date(timeIntervalSince1970: 1_795_132_800)
-        do { _ = try await rig.service.cancel(subscriptionID: subID, periodEnd: period); XCTFail() } catch {}
+        do { _ = try await rig.service.cancel(subscriptionID: subID, periodEnd: period); XCTFail() } catch { XCTAssertEqual(error as? AccountError, .unavailable) }
         _ = try await rig.service.cancel(subscriptionID: subID, periodEnd: period)
         _ = try await rig.service.cancel(subscriptionID: subID, periodEnd: period)
         let keys = transport.seen.map(idempotencyKey)
@@ -349,7 +349,7 @@ final class WireGivingTests: XCTestCase {
 
     func testCancelMalformedBodyThrows() async throws {
         let rig = try make(ScriptedTransport { _, _ in (.ok, #"{"subscription":12}"#) })
-        do { _ = try await rig.service.cancel(subscriptionID: subID, periodEnd: Date()); XCTFail() } catch {}
+        do { _ = try await rig.service.cancel(subscriptionID: subID, periodEnd: Date()); XCTFail() } catch { assertBodyRejected(error) }
     }
 
     // MARK: payment method
@@ -368,7 +368,7 @@ final class WireGivingTests: XCTestCase {
 
     func testPaymentMethodErrorsAndUnknownStatus() async throws {
         let unknown = try make(ScriptedTransport { _, _ in (.ok, #"{"mode":"test","status":"WEIRD","completed_at":null}"#) })
-        do { _ = try await unknown.service.paymentMethod(); XCTFail() } catch {}
+        do { _ = try await unknown.service.paymentMethod(); XCTFail() } catch { assertBodyRejected(error) }
         for (status, body, expected) in [(HTTPResponse.Status.tooManyRequests, "", AccountError.rateLimited), (.serviceUnavailable, "{}", .unavailable)] {
             let rig = try make(ScriptedTransport { _, _ in (status, body) })
             do { _ = try await rig.service.paymentMethod(); XCTFail() }
@@ -416,7 +416,7 @@ final class WireGivingTests: XCTestCase {
         }
         let transport = ScriptedTransport { _, index in index == 0 ? (.serviceUnavailable, "{}") : (.ok, #"{"url":"https://checkout.stripe.com/c/1"}"#) }
         let rig = try make(transport)
-        do { _ = try await rig.service.beginPayment(); XCTFail() } catch {}
+        do { _ = try await rig.service.beginPayment(); XCTFail() } catch { XCTAssertEqual(error as? AccountError, .unavailable) }
         _ = try await rig.service.beginPayment()
         XCTAssertEqual(idempotencyKey(transport.seen[0]), idempotencyKey(transport.seen[1]))
     }
@@ -445,7 +445,7 @@ final class WireGivingTests: XCTestCase {
         let session = try AccountSession(api: WireAPI(origin: testOrigin, transport: transport), store: store)
         let kept = KeptReferral("r" + String(repeating: "1", count: 42))
         let service = WireGiving(product: ProductClient(origin: testOrigin, transport: transport, session: session), referral: { kept.value })
-        do { _ = try await service.beginGift(amountMinor: 6000); XCTFail() } catch {}
+        do { _ = try await service.beginGift(amountMinor: 6000); XCTFail() } catch { XCTAssertEqual(error as? AccountError, .unavailable) }
         kept.value = "r" + String(repeating: "2", count: 42)
         _ = try await service.beginGift(amountMinor: 6000)
         let sent = try transport.seen.map { try XCTUnwrap(JSONSerialization.jsonObject(with: Data($0.body.utf8)) as? [String: Any]) }
@@ -490,7 +490,7 @@ final class WireGivingTests: XCTestCase {
         // Retryable outcomes (503, 429, lost response) keep the key for the same amount.
         let transport = ScriptedTransport { _, index in index < 2 ? (index == 0 ? (.serviceUnavailable, "{}") : (.tooManyRequests, "")) : (.created, checkoutJSON) }
         let rig = try make(transport)
-        for _ in 0..<2 { do { _ = try await rig.service.beginGift(amountMinor: 6000); XCTFail() } catch {} }
+        for _ in 0..<2 { do { _ = try await rig.service.beginGift(amountMinor: 6000); XCTFail() } catch { XCTAssertTrue([.unavailable, .rateLimited].contains(error as? AccountError), "\(error)") } }
         _ = try await rig.service.beginGift(amountMinor: 6000)
         XCTAssertEqual(Set(transport.seen.compactMap(idempotencyKey)).count, 1)
         // Success retired it: the next gift of the same amount is a new command.
@@ -502,7 +502,7 @@ final class WireGivingTests: XCTestCase {
         // A definitive refusal (409) retires the key too.
         let refused = ScriptedTransport { _, _ in (.conflict, "{}") }
         let r2 = try make(refused)
-        for _ in 0..<2 { do { _ = try await r2.service.beginGift(amountMinor: 6000); XCTFail() } catch {} }
+        for _ in 0..<2 { do { _ = try await r2.service.beginGift(amountMinor: 6000); XCTFail() } catch { XCTAssertEqual(error as? AccountError, .conflict) } }
         XCTAssertEqual(Set(refused.seen.compactMap(idempotencyKey)).count, 2)
     }
 
