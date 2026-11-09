@@ -132,31 +132,6 @@ final class ReferralQRTests: XCTestCase {
         #endif
     }
 
-    func testQREncodeDecodeRoundTrip() {
-        let url = ReferralInfo(code: "ABC123", linkCount: 0, irlCount: 0).inviteURL()!.absoluteString
-        let payload = QRPayload(url)
-        let roundTripped = QRPayload.decode(payload.encoded())
-        XCTAssertEqual(roundTripped, payload)
-        XCTAssertEqual(roundTripped?.referralCode, "ABC123")
-    }
-
-    func testDecodeTrimsWhitespaceAndRejectsEmpty() {
-        XCTAssertEqual(QRPayload.decode("  hello \n")?.payload, "hello")
-        XCTAssertNil(QRPayload.decode("   \n "))
-    }
-
-    func testReferralCodeNilForNonInviteQR() {
-        XCTAssertNil(QRPayload("https://example.com/other").referralCode)
-        XCTAssertNil(QRPayload("just some text").referralCode)
-    }
-
-    func testReferralCodeRejectsMalformedCodes() {
-        XCTAssertNil(QRPayload("https://dollaraday.org/join?ref=").referralCode)
-        XCTAssertNil(QRPayload("https://dollaraday.org/join?ref=a%20b").referralCode)
-        XCTAssertNil(QRPayload("https://dollaraday.org/join?ref=%3Cscript%3E").referralCode)
-        XCTAssertNil(QRPayload("https://dollaraday.org/join?ref=\(String(repeating: "A", count: 65))").referralCode)
-        XCTAssertEqual(QRPayload("https://dollaraday.org/join?ref=ABC_123-x").referralCode, "ABC_123-x")
-    }
 }
 
 // MARK: - EngagementModel state machine
@@ -258,35 +233,5 @@ final class EngagementModelTests: XCTestCase {
             XCTAssertNil(model.snapshot)
             XCTAssertNil(model.refreshNotice)
         }
-    }
-}
-
-// MARK: - ScanModel (R-4) attribution
-
-@MainActor
-final class ScanModelTests: XCTestCase {
-    func testScanningInviteResolvesCode() {
-        let model = ScanModel()
-        model.ingest("https://dollaraday.org/join?ref=FRIEND9")
-        XCTAssertEqual(model.phase, .resolved("FRIEND9"))
-    }
-
-    func testScanningNonInviteFails() {
-        let model = ScanModel()
-        model.ingest("https://example.com/not-us")
-        XCTAssertEqual(model.phase, .failed("That QR code isn’t a Dollar A Day invite."))
-    }
-
-    func testEmptyScanFails() {
-        let model = ScanModel()
-        model.ingest("   ")
-        XCTAssertEqual(model.phase, .failed("That didn’t scan. Try again."))
-    }
-
-    func testResetReturnsToScanning() {
-        let model = ScanModel()
-        model.ingest("nope")
-        model.reset()
-        XCTAssertEqual(model.phase, .scanning)
     }
 }

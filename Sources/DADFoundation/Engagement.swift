@@ -264,8 +264,17 @@ public struct ReferralInfo: Sendable, Equatable {
     /// The in-person (QR) link: the invite URL tagged `via=irl` so a scan is attributed as IRL (R-1, R-4).
     public func irlURL(host: String? = PublicOrigin.configured()) -> URL? { url(host: host, inPerson: true) }
 
+    /// Validate before using a server-provided code in a shareable URL.
+    static func sanitizedCode(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard (1...64).contains(trimmed.count),
+              trimmed.range(of: "^[A-Za-z0-9_-]+$", options: .regularExpression) != nil else { return nil }
+        return trimmed
+    }
+
     private func url(host: String?, inPerson: Bool) -> URL? {
-        guard let host, let safe = Attribution.sanitized(code), var components = URLComponents(string: host) else { return nil }
+        guard let host, let safe = Self.sanitizedCode(code), var components = URLComponents(string: host) else { return nil }
         components.path = "/r/\(safe)"
         components.queryItems = inPerson ? [URLQueryItem(name: "via", value: "irl")] : nil
         return components.url
@@ -308,36 +317,5 @@ public enum PublicOrigin {
         #else
         return nil
         #endif
-    }
-}
-
-// MARK: - QR (R-2)
-
-/// A scanned or shareable QR payload: the invite URL the on-screen QR encodes (rendered with CoreImage) and
-/// the parser that reads a scan back into a referral code.
-public struct QRPayload: Sendable, Equatable {
-    public let payload: String
-    public init(_ payload: String) { self.payload = payload }
-
-    public func encoded() -> String { payload }
-
-    /// Decode a scanned string back to a payload, trimming surrounding whitespace a camera
-    /// scan can introduce. Returns nil for an empty scan so the scanner ignores noise.
-    public static func decode(_ scanned: String) -> QRPayload? {
-        let trimmed = scanned.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        return QRPayload(trimmed)
-    }
-
-    /// Extract the referral code from a scanned invite URL (R-4: scanning another's IRL code
-    /// attributes to them): `/r/<code>` (what the app and web share) or a legacy `?ref=<code>`.
-    /// Returns nil when the scan is not a DAD invite link.
-    public var referralCode: String? {
-        guard let components = URLComponents(string: payload) else { return nil }
-        let parts = components.path.split(separator: "/").map(String.init)
-        // A scanned QR is untrusted input headed for sign-up attribution: accept only a well-formed code.
-        if parts.count == 2, parts[0] == "r" { return Attribution.sanitized(parts[1]) }
-        guard let ref = components.queryItems?.first(where: { $0.name == "ref" })?.value else { return nil }
-        return Attribution.sanitized(ref)
     }
 }

@@ -232,25 +232,3 @@ public struct DADStatTile: View {
         .clipShape(RoundedRectangle(cornerRadius: .dadRadius("card"), style: .continuous))
     }
 }
-
-/// A short guidance line with an optional trailing action, for empty or near-empty states.
-/// The action is a tertiary button so it reads as text-weight, not a competing call-to-action.
-public struct DADEmptyHint: View {
-    private let text: String
-    private let action: (label: String, perform: () -> Void)?
-    public init(text: String, action: (label: String, perform: () -> Void)? = nil) {
-        self.text = text
-        self.action = action
-    }
-    public var body: some View {
-        HStack(spacing: .dadSpace("3")) {
-            Text(text).font(.body).foregroundStyle(.secondary)
-            if let action {
-                Spacer(minLength: 0)
-                Button(action.label, action: action.perform)
-                    .buttonStyle(DADButtonStyle(.tertiary))
-            }
-        }
-        .frame(minHeight: 44)
-    }
-}

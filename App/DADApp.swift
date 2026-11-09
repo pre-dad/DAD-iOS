@@ -286,7 +286,7 @@ final class AccountModel {
     }
     /// Account deletion forgets where this install came from, link tokens included.
     private nonisolated static func wipeAttribution(linkTokens key: String = "org.dad.link-tokens") {
-        DefaultsAttributionStore().clear()
+        LegacyAttribution.clear()
         DefaultsLinkTokenStore(key: key).clear()
     }
     func load() async {
