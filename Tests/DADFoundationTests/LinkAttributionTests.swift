@@ -63,6 +63,31 @@ final class LinkAttributionTests: XCTestCase {
         XCTAssertEqual(sent["token"] as? String, kept)
     }
 
+    func testLaterReferralReplacesTheTokenWithoutLosingTheCompanyTouch() async throws {
+        let first = String(repeating: "a", count: 43)
+        let second = String(repeating: "b", count: 43)
+        let company = String(repeating: "c", count: 43)
+        let transport = ScriptedTransport { seen, _ in
+            let token = seen.request.path == "/donor/company/ACME" ? company :
+                seen.request.path == "/donor/referrals/FIRST" ? first : second
+            if seen.request.path == "/donor/company/ACME" {
+                return (.ok, "{\"captured\":true,\"token\":\"\(token)\"}")
+            }
+            return (.ok, "{\"captured\":true,\"public_name\":null,\"token\":\"\(token)\"}")
+        }
+        let (attribution, links, sources) = try make(transport)
+        await attribution.captureReferral(code: "FIRST", inPerson: false)
+        await attribution.captureCompany(code: "ACME")
+        await attribution.captureReferral(code: "SECOND", inPerson: true)
+
+        XCTAssertEqual(links.load(), LinkTokens(referral: second, company: company))
+        XCTAssertEqual(sources.all, ["link", "company", "IRL"])
+        XCTAssertEqual(transport.seen.count, 3)
+        XCTAssertNil(try body(transport.seen[0])["token"])
+        XCTAssertEqual(try body(transport.seen[2])["token"] as? String, first)
+        XCTAssertEqual(try body(transport.seen[2])["kind"] as? String, "IRL")
+    }
+
     func testACaptureThatKeepsNothingDiscardsTheTokenAndAFailureKeepsIt() async throws {
         let nothing = ScriptedTransport { _, _ in (.ok, #"{"captured":false,"public_name":null,"token":null}"#) }
         let (cleared, links, sources) = try make(nothing, tokens: LinkTokens(referral: kept, company: kept))
@@ -114,7 +139,7 @@ final class LinkAttributionTests: XCTestCase {
         let store = DefaultsLinkTokenStore(defaults: defaults, key: "t")
         XCTAssertEqual(store.load(), LinkTokens())
         store.save(LinkTokens(referral: kept))
-        XCTAssertEqual(store.load(), LinkTokens(referral: kept))
+        XCTAssertEqual(DefaultsLinkTokenStore(defaults: defaults, key: "t").load(), LinkTokens(referral: kept))
         store.save(LinkTokens())
         XCTAssertNil(defaults.data(forKey: "t"))
     }

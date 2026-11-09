@@ -2,68 +2,20 @@ import Foundation
 import XCTest
 @testable import DADFoundation
 
-// MARK: - Attribution
-
-final class AttributionTests: XCTestCase {
-    private final class MemoryStore: AttributionStore, @unchecked Sendable {
-        private let lock = NSLock()
-        private var value: Attribution?
-        func load() -> Attribution? { lock.withLock { value } }
-        func save(_ attribution: Attribution) { lock.withLock { value = attribution } }
-        func clear() { lock.withLock { value = nil } }
-    }
-
-    func testSanitizationRejectsNonCodeInput() {
-        let a = Attribution(inviteCode: "ABC-123", irlCode: "has space", companyCode: "", source: "../etc/passwd")
-        XCTAssertEqual(a.inviteCode, "ABC-123")
-        XCTAssertNil(a.irlCode)       // space rejected
-        XCTAssertNil(a.companyCode)   // empty rejected
-        XCTAssertNil(a.source)        // slashes rejected
-    }
-
-    func testCaptureMergesLastTouchWinsPerField() {
-        let capture = AttributionCapture(store: MemoryStore())
-        capture.capture(Attribution(inviteCode: "INV1", source: "share"))
-        // A later touch supplies a company code and a DIFFERENT invite; PRD R-4: the most recent wins.
-        let merged = capture.capture(Attribution(inviteCode: "INV2", companyCode: "ACME"))
-        XCTAssertEqual(merged.inviteCode, "INV2")   // last touch wins
-        XCTAssertEqual(merged.companyCode, "ACME")  // new field added
-        XCTAssertEqual(merged.source, "share")      // untouched field keeps its stored value
-        XCTAssertEqual(capture.current()?.inviteCode, "INV2")
-    }
-
-    func testAnalyticsSourceMapsToServerEnum() {
-        XCTAssertEqual(Attribution(inviteCode: "A").analyticsSource, "link")
-        XCTAssertEqual(Attribution(irlCode: "A").analyticsSource, "IRL")
-        XCTAssertEqual(Attribution(companyCode: "A").analyticsSource, "company")
-        XCTAssertNil(Attribution(source: "share").analyticsSource)
-        for source in Attribution(inviteCode: "A", irlCode: "B", companyCode: "C").analyticsSource.map({ [$0] }) ?? [] {
-            XCTAssertTrue(AnalyticsRecord.attributionSources.contains(source))
-        }
-    }
-
-    func testEmptyCaptureIsNotPersisted() {
-        let store = MemoryStore()
-        let capture = AttributionCapture(store: store)
-        capture.capture(Attribution())
-        XCTAssertNil(capture.current())
-    }
-
-    func testConsumeClearsStore() {
-        let capture = AttributionCapture(store: MemoryStore())
-        capture.capture(Attribution(companyCode: "ACME"))
-        XCTAssertNotNil(capture.current())
-        capture.consume()
-        XCTAssertNil(capture.current())
-    }
-
-    func testDefaultsStoreSurvivesAcrossStoreInstances() {
-        let suite = "org.dad.attribution.test.\(UUID().uuidString)"
+final class LegacyAttributionTests: XCTestCase {
+    func testAccountDeletionClearsLegacyAttributionWithoutRemovingCurrentTokens() {
+        let suite = "legacy-attribution-\(UUID())"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
-        DefaultsAttributionStore(defaults: defaults).save(Attribution(irlCode: "IRL9"))
-        // A fresh store instance (simulating a cold launch) reads the persisted value.
-        XCTAssertEqual(DefaultsAttributionStore(defaults: defaults).load()?.irlCode, "IRL9")
+        defaults.set(Data("old-attribution".utf8), forKey: "org.dad.attribution")
+        let tokens = DefaultsLinkTokenStore(defaults: defaults)
+        tokens.save(LinkTokens(referral: "current-referral", company: "current-company"))
+
+        LegacyAttribution.clear(defaults: defaults)
+        LegacyAttribution.clear(defaults: defaults)
+
+        XCTAssertNil(defaults.object(forKey: "org.dad.attribution"))
+        XCTAssertEqual(tokens.load(), LinkTokens(referral: "current-referral", company: "current-company"))
     }
 }
 

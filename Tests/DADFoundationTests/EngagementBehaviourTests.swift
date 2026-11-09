@@ -35,6 +35,12 @@ final class InviteLinkTests: XCTestCase {
         XCTAssertEqual(referral.irlURL(host: "https://dollaraday.org")?.absoluteString, "https://dollaraday.org/r/ALEX42?via=irl")
     }
 
+    func testWhitespaceAroundAServerCodeIsTrimmedBeforeBuildingTheLink() {
+        let referral = ReferralInfo(code: "  ABC_123-x  ", linkCount: nil, irlCount: nil)
+        XCTAssertEqual(referral.inviteURL(host: "https://dollaraday.org")?.absoluteString,
+                       "https://dollaraday.org/r/ABC_123-x")
+    }
+
     func testAMalformedCodeNeverBecomesALink() {
         for code in ["", "a b", "x/../y", "<script>", String(repeating: "A", count: 65)] {
             let referral = ReferralInfo(code: code, linkCount: nil, irlCount: nil)
@@ -43,12 +49,12 @@ final class InviteLinkTests: XCTestCase {
         }
     }
 
-    func testTheInPersonLinkRoundTripsThroughTheScannerAndTheRouterShape() {
-        let url = ReferralInfo(code: "ALEX42", linkCount: nil, irlCount: nil).irlURL(host: "https://dollaraday.org")!
-        XCTAssertEqual(QRPayload(url.absoluteString).referralCode, "ALEX42")
-        XCTAssertEqual(QRPayload("https://dollaraday.org/r/ALEX42/extra").referralCode, nil)
-        XCTAssertEqual(QRPayload("https://dollaraday.org/r/").referralCode, nil)
-        XCTAssertEqual(QRPayload("https://dollaraday.org/r/%3Cx%3E").referralCode, nil)
+    func testTheInPersonLinkRoundTripsThroughTheAppRouter() throws {
+        let origin = try XCTUnwrap(URL(string: "https://dollaraday.org"))
+        let router = try LinkRouter(publicOrigin: origin)
+        let url = try XCTUnwrap(ReferralInfo(code: "ALEX42", linkCount: nil, irlCount: nil).irlURL(host: origin.absoluteString))
+        XCTAssertEqual(router.route(url), .referral(code: "ALEX42", inPerson: true))
+        XCTAssertNil(router.route(try XCTUnwrap(URL(string: "https://other.test/r/ALEX42"))))
     }
 
     func testUnknownCountsAreNotZero() {
