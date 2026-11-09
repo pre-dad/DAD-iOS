@@ -153,7 +153,7 @@ public struct WireEngagement: EngagementService {
         guard let name = sharing.public_name, !name.isEmpty, sharing.link != nil else { return .needsName }
         // The server names the code (`referral_code`, null exactly when the links are); the share and QR links are
         // rebuilt from the configured public origin around it.
-        guard let raw = sharing.referral_code, let code = Attribution.sanitized(raw) else { return .unusable }
+        guard let raw = sharing.referral_code, let code = ReferralInfo.sanitizedCode(raw) else { return .unusable }
         return .code(code)
     }
 

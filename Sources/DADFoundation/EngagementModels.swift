@@ -196,37 +196,3 @@ public final class InitiativeSpendModel {
         }
     }
 }
-
-/// Drives the IRL QR-scan attribution flow (R-4). The camera capture lives in the App layer
-/// behind `ScanSource`; this model owns the state machine — a decoded scan that carries a
-/// DAD referral code resolves to `.resolved(code)`, anything else is a clear failure — so the
-/// attribution logic is tested without a camera (which the CI simulator cannot provide).
-@MainActor
-@Observable
-public final class ScanModel {
-    public enum Phase: Sendable, Equatable {
-        case scanning
-        case resolved(String)
-        case failed(String)
-    }
-
-    public private(set) var phase: Phase = .scanning
-
-    public init() {}
-
-    /// Feed a raw scanned string. A DAD invite link yields the referrer's code; anything else
-    /// is rejected so a stray QR can't be mistaken for an invite.
-    public func ingest(_ scanned: String) {
-        guard let payload = QRPayload.decode(scanned) else {
-            phase = .failed("That didn’t scan. Try again.")
-            return
-        }
-        guard let code = payload.referralCode else {
-            phase = .failed("That QR code isn’t a Dollar A Day invite.")
-            return
-        }
-        phase = .resolved(code)
-    }
-
-    public func reset() { phase = .scanning }
-}

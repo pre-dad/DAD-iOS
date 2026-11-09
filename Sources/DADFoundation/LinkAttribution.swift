@@ -16,7 +16,7 @@ public protocol LinkTokenStore: Sendable {
     func save(_ tokens: LinkTokens)
 }
 
-/// UserDefaults, like `DefaultsAttributionStore`: a token only steers attribution credit at the next gift and is
+/// UserDefaults: a token only steers attribution credit at the next gift and is
 /// worth nothing to anyone else, so it is not a Keychain credential.
 public struct DefaultsLinkTokenStore: LinkTokenStore {
     private nonisolated(unsafe) let defaults: UserDefaults
