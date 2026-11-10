@@ -7,6 +7,9 @@ these; this file only adds what they do not say.
   contract and native boundaries, contract updates, release readiness.
 - Cross-repo system docs (topology, the mobile contract, re-vendor model) live in the
   separate **DAD-Docs** repo. Read the mobile contract before any contract change.
+- **[Shared agent workflow](https://github.com/pre-dad/DAD-Docs/blob/dev/conventions/agent-workflow.md)** —
+  read DAD-Docs for skill setup, routing, and independent-review boundaries. Keep
+  shared procedures there; this guide owns repo-local commands and constraints.
 
 ## Build and test
 
