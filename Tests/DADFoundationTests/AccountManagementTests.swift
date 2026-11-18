@@ -294,12 +294,16 @@ final class WireAccountManagementTests: XCTestCase {
 private actor FakeWallet: WalletPassService {
     var available = true
     var fails = false
-    func set(available: Bool, fails: Bool) { self.available = available; self.fails = fails }
+    var throttled = false
+    func set(available: Bool, fails: Bool, throttled: Bool = false) {
+        self.available = available; self.fails = fails; self.throttled = throttled
+    }
     func appleWalletAvailable() async throws -> Bool {
         if fails { throw AccountError.unavailable }
         return available
     }
     func applePass() async throws -> Data {
+        if throttled { throw AccountError.rateLimited }
         if fails { throw AccountError.unavailable }
         return Data("pkpass".utf8)
     }
@@ -338,6 +342,16 @@ private actor FakeWallet: WalletPassService {
         model.passRejected()
         XCTAssertNil(model.pass)
         XCTAssertEqual(model.error, WalletPassModel.failure)
+    }
+
+    func testAThrottledPassSaysToWaitRatherThanRetry() async {
+        let service = FakeWallet()
+        await service.set(available: true, fails: false, throttled: true)
+        let model = WalletPassModel(service: service)
+        await model.check()
+        await model.prepare()
+        XCTAssertNil(model.pass)
+        XCTAssertEqual(model.error, "Too many attempts. Please wait a moment and try again. Your on-screen code still works.")
     }
 }
 
