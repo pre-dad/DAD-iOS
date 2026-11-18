@@ -32,6 +32,15 @@ final class AnalyticsRecordTests: XCTestCase {
         }
     }
 
+    func testCarrierEventsRejectUnrelatedProperties() {
+        for (event, key, value) in [(AnalyticsEvent.attributionCaptured, "source", "link"),
+                                    (.inviteShared, "channel", "copy"), (.pushOpened, "type", "reminder")] {
+            XCTAssertThrowsError(try AnalyticsRecord(event, properties: [key: value, "email": "private@example.org"])) {
+                XCTAssertEqual($0 as? AnalyticsRecord.ValidationError, .unexpectedProperties)
+            }
+        }
+    }
+
     func testEmptyRequiredValueIsRejected() {
         XCTAssertThrowsError(try AnalyticsRecord(.inviteShared, properties: ["channel": ""]))
     }
@@ -132,6 +141,26 @@ final class AnalyticsRecorderTests: XCTestCase {
         await recorder.record(record)
         let pending = await recorder.pending
         XCTAssertEqual(pending, 0)
+    }
+
+    func testLongSessionsBoundLocalDeduplicationAndKeepStableIDsForOlderRepeats() async throws {
+        let sink = SpySink()
+        let recorder = AnalyticsRecorder(sink: sink)
+        let records = try (0..<(AnalyticsRecorder.deliveredHistoryLimit + 100)).map { _ in try AnalyticsRecord(.appOpened) }
+        for batch in AnalyticsBatch.chunk(records) {
+            for record in batch.events { await recorder.record(record) }
+            try await recorder.flush()
+        }
+        await recorder.record(try XCTUnwrap(records.last))
+        let afterRecent = await recorder.pending
+        XCTAssertEqual(afterRecent, 0, "recent repeats are still suppressed")
+        let oldest = try XCTUnwrap(records.first)
+        await recorder.record(oldest)
+        let afterOld = await recorder.pending
+        XCTAssertEqual(afterOld, 1, "old ids leave the local window rather than growing it forever")
+        try await recorder.flush()
+        let sent = await sink.flattened
+        XCTAssertEqual(sent.last?.id, oldest.id, "the server can deduplicate the older repeat")
     }
 
     private final class Clock: @unchecked Sendable {

@@ -82,6 +82,7 @@ public struct AnalyticsRecord: Sendable, Equatable, Identifiable {
         id: UUID = UUID(), journeyID: UUID? = nil
     ) throws {
         if let key = name.requiredPropertyKey {
+            guard properties.count <= 1 else { throw ValidationError.unexpectedProperties }
             guard let value = properties[key], !value.isEmpty else {
                 throw ValidationError.missingRequiredProperty(key)
             }

@@ -134,6 +134,36 @@ final class AnalyticsUploadTests: XCTestCase {
         consent.choice = true
         XCTAssertEqual(DefaultsAnalyticsConsent(defaults: defaults).choice, true)
     }
+
+    @MainActor func testRevokingConsentStopsQueuedBatchesWhileAnUploadIsInFlight() async throws {
+        actor SlowSink: AnalyticsSink {
+            let entered = Gate()
+            let release = Gate()
+            private(set) var calls = 0
+            func send(_ batch: AnalyticsBatch) async throws {
+                calls += 1
+                await entered.release()
+                await release.pass()
+            }
+        }
+        let sink = SlowSink()
+        let consent = MemoryAnalyticsConsent(choice: true)
+        let analytics = AnalyticsController(consent: consent, sink: sink)
+        analytics.emit(.appOpened)
+        await sink.entered.pass()
+        for _ in 0..<200 { analytics.emit(.roleSelected) }
+        for _ in 0..<200 where await analytics.pending < 201 { try await Task.sleep(for: .milliseconds(10)) }
+        let queued = await analytics.pending
+        XCTAssertEqual(queued, 201)
+        analytics.choose(false)
+        await sink.release.release()
+        for _ in 0..<200 where await analytics.pending > 0 { try await Task.sleep(for: .milliseconds(10)) }
+        try await analytics.flush()
+        let remaining = await analytics.pending
+        let calls = await sink.calls
+        XCTAssertEqual(remaining, 0)
+        XCTAssertEqual(calls, 1, "only the upload already started before revocation may finish")
+    }
 }
 
 final class PushTests: XCTestCase {

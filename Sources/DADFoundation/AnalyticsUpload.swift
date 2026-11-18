@@ -32,6 +32,17 @@ public final class MemoryAnalyticsConsent: AnalyticsConsent, @unchecked Sendable
     }
 }
 
+private struct ConsentedAnalyticsSink: AnalyticsSink {
+    let consent: any AnalyticsConsent
+    let inner: any AnalyticsSink
+
+    func send(_ batch: AnalyticsBatch) async throws {
+        // A flush can span several batches; revoking consent must also stop batches already queued.
+        guard consent.choice == true else { throw AccountError.invalidInput }
+        try await inner.send(batch)
+    }
+}
+
 /// The app's analytics: records nothing until the donor allows it, then buffers events in the recorder and uploads
 /// them in the background (a failed upload is retried with the next event once its backoff has passed). Declining drops anything still buffered.
 /// One journey id per launch groups a visit, like the website's per-tab journey.
@@ -45,7 +56,7 @@ public final class AnalyticsController {
 
     public init(consent: any AnalyticsConsent, sink: any AnalyticsSink) {
         self.consent = consent
-        self.recorder = AnalyticsRecorder(sink: sink)
+        self.recorder = AnalyticsRecorder(sink: ConsentedAnalyticsSink(consent: consent, inner: sink))
         choice = consent.choice
     }
 
@@ -65,8 +76,11 @@ public final class AnalyticsController {
         guard consent.choice == true,
               let record = try? AnalyticsRecord(event, properties: properties, journeyID: journey) else { return }
         let recorder = recorder
+        let consent = consent
         Task {
+            guard consent.choice == true else { return }
             await recorder.record(record)
+            guard consent.choice == true else { await recorder.discardPending(); return }
             try? await recorder.flushWhenDue()
         }
     }
