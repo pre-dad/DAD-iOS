@@ -314,8 +314,8 @@ exercised only at archive/submission time. Pre-submission:
   batches at 100 events.
 - **Server-side pressure to plan for.** A push-driven open (an event reminder to all attendees) arrives within
   seconds, so the dashboard, initiative and registration endpoints need headroom for a launch-minute burst; the
-  push sender should jitter or batch sends. Client requests carry no jitter on launch; add server-side
-  rate limiting and cache the public initiative read at the edge.
+  push sender should jitter or batch sends. Client requests carry no jitter on launch. DAD-Main rate limits
+  each client across all its API replicas; caching the public initiative read at the edge remains to plan.
 
 ## Analytics and push (contract 2.9.0)
 
