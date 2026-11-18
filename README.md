@@ -59,7 +59,9 @@ locked in `Package.resolved` and the Xcode workspace's SwiftPM lock.
 
 `AccountSession` owns one shared refresh operation, atomic credential replacement,
 revocation, bounded read retry, and logout/account-switch race protection. Keychain uses
-non-synchronizing `WhenUnlockedThisDeviceOnly` items. Tokens and proofs are redacted from
+non-synchronizing `WhenUnlockedThisDeviceOnly` items. iOS keeps Keychain items when an app is deleted, so an
+install's first launch clears the donor and partner sessions (`FreshInstall`): deleting the app signs out. It
+waits for a launch after the device's first unlock, and keeps the partner application receipt. Tokens and proofs are redacted from
 value descriptions; they are never logged. URLSession rejects redirects, sends no
 browser cookies or Origin, limits responses to 1 MiB, and has request/resource timeouts.
 Canceling a read does not cancel another caller's shared refresh. An in-flight refresh

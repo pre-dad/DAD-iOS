@@ -236,6 +236,9 @@ final class AccountModel {
                 // (org.dad.foundation) and debug (.debug) builds never share a
                 // credential bucket, and the name tracks the id automatically.
                 let service = Bundle.main.bundleIdentifier ?? "org.dad.foundation"
+                FreshInstall.signOutIfNew(sessions: [KeychainStore(service: service),
+                                                     KeychainStore(service: service, account: "partner-session")],
+                                          protectedDataAvailable: UIApplication.shared.isProtectedDataAvailable)
                 let built = try AccountSession(api: WireAPI(origin: origin), store: KeychainStore(service: service))
                 let auth = try WireAuth(origin: origin, deviceName: UIDevice.current.name)
                 let credentialAuth = try WireCredentialAuth(origin: origin, deviceName: UIDevice.current.name)
