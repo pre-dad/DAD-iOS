@@ -93,6 +93,7 @@ struct GiftScreen: View {
     var foundingProvider: (any DashboardService)? = nil
     @State private var confirmingCancel = false
     @ScaledMetric(relativeTo: .largeTitle) private var amountSize: CGFloat = 44
+    @Environment(\.dynamicTypeSize) private var typeSize
     /// Show the one-time celebration after a FIRST gift is set up. Tracks that this screen
     /// started a gift (so a later amount-change never re-celebrates) and whether it's been shown.
     @State private var startedGift = false
@@ -250,7 +251,8 @@ struct GiftScreen: View {
     private var amountCard: some View {
         DADCard {
             VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 8) {
+                LazyVGrid(columns: typeSize.isAccessibilitySize ? [GridItem(.flexible())]
+                          : [GridItem(.adaptive(minimum: 120), spacing: 8)], spacing: 8) {
                     ForEach([1, 3, 5], id: \.self) { dollars in
                         amountChip(dollars)
                     }
