@@ -56,6 +56,7 @@ public final class AccountSettingsModel {
             snapshot = try await service.load()
             phase = .ready
         } catch {
+            if error as? AccountError == .signedOut { signedOut = true }
             phase = .failed(error.userMessage)
         }
     }
@@ -65,14 +66,7 @@ public final class AccountSettingsModel {
     /// started before the first returns would be rejected as stale.
     public func toggle(_ key: String, _ value: Bool) async {
         guard let current = snapshot, !isBusy else { return }
-        isBusy = true
-        defer { isBusy = false }
-        actionError = nil
-        do {
-            snapshot = try await service.savePreferences(current.preferences.with(key, value))
-        } catch {
-            actionError = error.userMessage
-        }
+        await save(current.preferences.with(key, value))
     }
 
     /// Add one free-form volunteer interest and persist. A rejected entry sets `interestError` and
@@ -104,7 +98,20 @@ public final class AccountSettingsModel {
         do {
             snapshot = try await service.savePreferences(preferences)
             return true
+        } catch AccountError.conflict {
+            // Re-read without replaying the stale block: another screen or device may have changed
+            // privacy choices. The donor reviews those choices before making a fresh edit.
+            do {
+                snapshot = try await service.load()
+                actionError = "Your settings changed elsewhere. We’ve refreshed them; review your choices and try again."
+            } catch {
+                if error as? AccountError == .signedOut { signedOut = true }
+                phase = .failed(error.userMessage)
+                actionError = "Your settings changed elsewhere, but couldn’t be refreshed. Please try again."
+            }
+            return false
         } catch {
+            if error as? AccountError == .signedOut { signedOut = true }
             actionError = error.userMessage
             return false
         }
@@ -124,6 +131,7 @@ public final class AccountSettingsModel {
         do {
             try await service.deleteAccount()
         } catch {
+            if error as? AccountError == .signedOut { signedOut = true }
             if case AccountError.deletionBlocked = error { deletionBlocked = true }
             actionError = error.userMessage
             return

@@ -37,8 +37,7 @@ public struct WireAccountSettings: AccountSettingsService {
             switch try await client.savePreferences(.init(body: .json(body))) {
             case .ok(let response): return try Self.snapshot(response.body.json)
             case .unauthorized: throw AccountError.signedOut
-            // Stale `version`: the caller must re-read; surfaced as unavailable so the model shows retry.
-            case .conflict: throw AccountError.unavailable
+            case .conflict: throw AccountError.conflict
             case .tooManyRequests: throw AccountError.rateLimited
             default: throw AccountError.unavailable
             }
