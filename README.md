@@ -19,7 +19,7 @@ Select the shared DAD scheme and an iPhone simulator. A Debug build with no `DAD
 labeled synthetic account through the same session API as a configured deployment. Release
 builds compile out every preview double and ignore `--preview-*` launch arguments; an
 unconfigured Release build shows the unavailable state instead of sample data.
-Run `bash scripts/check-ios.sh` for contract verification, Swift unit tests, and simulator
+Run `bash scripts/check-ios.sh` for contract verification, Swift unit tests, Release compilation, and simulator
 journeys. `DAD_SIMULATOR_ID`, `DAD_SWIFT_BUILD`, and `DAD_XCODE_BUILD` override the simulator
 and disposable build paths. Unit tests alone: `swift test --scratch-path ~/.cache/dad-ios-swift` (add `--disable-sandbox`
 when running inside a tool that already sandboxes processes).

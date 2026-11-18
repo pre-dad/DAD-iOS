@@ -143,7 +143,11 @@ final class AccountModel {
         #endif
         let configuredPublicOrigin = (Bundle.main.object(forInfoDictionaryKey: "DADPublicOrigin") as? String).flatMap(URL.init(string:))
         router = stubRouter ?? configuredPublicOrigin.flatMap { try? LinkRouter(publicOrigin: $0) }
+        #if DEBUG
         publicOrigin = stubRouter == nil ? configuredPublicOrigin : StubBackend.origin
+        #else
+        publicOrigin = configuredPublicOrigin
+        #endif
         #if DEBUG
         if preview {
             partnerSignIn = PreviewPartnerSignIn()
@@ -831,6 +835,7 @@ struct DADApp: App {
                 }
             }
             .modifier(AppBackground())
+            .preferredColorScheme(launchFlag("--preview-dark") ? .dark : nil)
             .tint(tokenColor("brand-ink"))
             .environment(model.analytics)
             .task {
