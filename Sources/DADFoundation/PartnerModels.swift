@@ -301,8 +301,12 @@ public final class PartnerModel {
 
     public func signOut() async {
         try? await service.unregisterPushDevice()
-        try? await service.signOut()
-        signedOut = true
+        do {
+            try await service.signOut()
+            signedOut = true
+        } catch {
+            actionError = error.userMessage
+        }
     }
 
     private static func file(_ pdf: Data, name: String) throws -> PartnerReportFile {

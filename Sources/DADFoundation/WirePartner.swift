@@ -16,7 +16,11 @@ public actor PartnerSession {
 
     public init(store: any CredentialStore, now: @escaping @Sendable () -> Date = Date.init) throws {
         self.store = store; self.now = now
-        stored = try store.load()
+        do { stored = try store.load() }
+        catch is DecodingError {
+            try store.clear()
+            stored = nil
+        }
     }
 
     public var isSignedIn: Bool { (try? token()) != nil }

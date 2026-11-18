@@ -112,6 +112,7 @@ final class PartnerModelTests: XCTestCase {
         var removeError: Error?
         var actionError: Error?
         var retainedError: Error?
+        var signOutError: Error?
         private(set) var invited: [(String, String, PartnerRole)] = []
         private(set) var profiles: [(String, String)] = []
         private(set) var workforce: [Int] = []
@@ -167,7 +168,10 @@ final class PartnerModelTests: XCTestCase {
             if let retainedError { throw retainedError }
             return Data("%PDF".utf8)
         }
-        func signOut() async throws { signedOut = true }
+        func signOut() async throws {
+            if let signOutError { throw signOutError }
+            signedOut = true
+        }
         func registerPushDevice(token: String, environment: PushEnvironment) async throws { pushRegistered = true }
         func unregisterPushDevice() async throws { pushUnregistered = true }
     }
@@ -365,6 +369,16 @@ final class PartnerModelTests: XCTestCase {
         XCTAssertTrue(svc.invited.isEmpty)
     }
 
+    func testFailedLocalSignOutDoesNotClaimTheSessionWasForgotten() async {
+        let service = FakeService()
+        service.signOutError = AccountError.secureStorage(-1)
+        let model = PartnerModel(service: service)
+        await model.load()
+        await model.signOut()
+        XCTAssertFalse(model.signedOut)
+        XCTAssertNotNil(model.actionError)
+    }
+
     func testLostSessionDuringAnActionEndsThePortal() async {
         let svc = FakeService()
         let model = PartnerModel(service: svc)
@@ -502,6 +516,20 @@ final class PartnerSignInModelTests: XCTestCase {
 }
 
 final class PartnerSessionTests: XCTestCase {
+    func testCorruptPartnerCredentialsAreForgottenWithoutBlockingAppStartup() async throws {
+        struct CorruptStore: CredentialStore {
+            let wiped: WipeBox
+            func load() throws -> Credentials? { throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "corrupt")) }
+            func save(_ credentials: Credentials) throws {}
+            func clear() throws { wiped.hit() }
+        }
+        let wiped = WipeBox()
+        let session = try PartnerSession(store: CorruptStore(wiped: wiped))
+        let signedIn = await session.isSignedIn
+        XCTAssertFalse(signedIn)
+        XCTAssertEqual(wiped.count, 1)
+    }
+
     func testSessionLastsTwelveHoursThenIsForgotten() async throws {
         let clock = Clock()
         let store = MemoryStore(nil)
