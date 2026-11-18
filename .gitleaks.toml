@@ -1,28 +1,27 @@
-# gitleaks configuration for the secret-scan CI guard.
-#
-# Extends the full default gitleaks ruleset, then suppresses exactly three
-# known-safe sources that the entropy-based `generic-api-key` rule flags as
-# false positives. Each was reviewed as a non-secret in the R1 audit:
-#
-#   1. contracts/foundation/manifest.json — the foundation integrity manifest.
-#      Every value is a SHA-256 content hash (64 hex chars) of a vendored
-#      foundation file, not a credential. High-entropy by design.
-#   2. Tests/DADFoundationTests/ApplicationSubmitTests.swift — a hardcoded UUID
-#      test-fixture idempotency key, not a real secret.
-#   3. UITests/CredentialAuthFlowTests.swift — a fake DEBUG stub claim link
-#      value used by the UI test, not a real credential.
-#
-# Allowlisting is path-scoped to these exact files only, so a genuine secret
-# added anywhere else (or a new, non-fixture high-entropy value in these files)
-# still trips the guard.
-
 [extend]
 useDefault = true
 
-[allowlist]
-description = "Reviewed non-secrets: foundation content-hash manifest and two test fixtures (R1 audit)."
-paths = [
-  '''^contracts/foundation/manifest\.json$''',
-  '''^Tests/DADFoundationTests/ApplicationSubmitTests\.swift$''',
-  '''^UITests/CredentialAuthFlowTests\.swift$''',
-]
+# Match the reviewed non-secret as well as its file, so unrelated credentials in these files still fail.
+[[allowlists]]
+targetRules = ["generic-api-key"]
+description = "Vendored foundation content hashes"
+condition = "AND"
+paths = ['''^contracts/foundation/manifest\.json$''']
+regexTarget = "match"
+regexes = ['''^(?:openapi\.json|mobile\.openapi\.json|swift\.openapi\.json|tokens\.json|tokens\.ts|DADTokens\.swift|DADTokens\.kt)": "[a-f0-9]{64}"$''']
+
+[[allowlists]]
+targetRules = ["generic-api-key"]
+description = "Synthetic application idempotency key"
+condition = "AND"
+paths = ['''^Tests/DADFoundationTests/ApplicationSubmitTests\.swift$''']
+regexTarget = "match"
+regexes = ['''^idempotencyKey: "4c3b8f0e-7a1d-4e55-9f2a-0b1c2d3e4f50"$''']
+
+[[allowlists]]
+targetRules = ["generic-api-key"]
+description = "DEBUG stub claim token"
+condition = "AND"
+paths = ['''^UITests/CredentialAuthFlowTests\.swift$''']
+regexTarget = "match"
+regexes = ['''^token=stubclaim0123456789abcdef0123456789abcdef"$''']
