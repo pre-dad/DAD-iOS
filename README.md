@@ -24,16 +24,35 @@ journeys. `DAD_SIMULATOR_ID`, `DAD_SWIFT_BUILD`, and `DAD_XCODE_BUILD` override 
 and disposable build paths. Unit tests alone: `swift test --scratch-path ~/.cache/dad-ios-swift` (add `--disable-sandbox`
 when running inside a tool that already sandboxes processes).
 
-CI executes that same script. The pinned Apple generator plugin is trusted explicitly
+CI executes that same script. It explicitly installs the freshly built app and UI-test runner before
+testing, so a warm simulator cannot silently execute an older installed bundle.
+The pinned Apple generator plugin is trusted explicitly
 with `-skipPackagePluginValidation`; compilation and tests remain enabled. Xcode's benign
 AppIntents metadata-extraction diagnostic is not suppressed; this app defines no intents.
+
+Swift 6 compilation supplies type and concurrency checking; there is no separate Swift lint tool.
+Additional local checks:
+
+```sh
+plutil -lint DAD.xcodeproj/project.pbxproj App/Info.plist App/DAD.entitlements App/PrivacyInfo.xcprivacy
+bash -n scripts/check-ios.sh
+swift test --scratch-path /tmp/dad-ios-thread --force-resolved-versions --sanitize=thread
+gitleaks git --redact --no-banner --config .gitleaks.toml
+node --test scripts/check-secrets-config.test.mjs
+```
+
+The last two commands require Gitleaks 8.30.0+ (CI installs the pinned binary). The secret-scan
+job also tests that its reviewed fixture exceptions cannot hide another credential in the same file.
+Settings includes About DAD with the running app's version and build number; sample-account copy
+appears only in Debug previews and stub-backed runs.
 
 ## Shared contract and native boundaries
 
 `foundation.lock.json` pins mobile foundation 2.12.0 and its manifest digest. The vendored
 release is verified before generation. `prepare-client.mjs` copies the Swift generator input, null-only Codable adapter, tokens,
 and link policy into ignored generator inputs. Apple's pinned Swift generator produces
-types and a client during the build, scoped to profile, claim, refresh, and logout.
+types and a client during the build, scoped by the checked-in operation allow-list in
+`Sources/DADFoundation/openapi-generator-config.yaml` to the native features described below.
 Generated files are not hand-edited or separately maintained. Dependency revisions are
 locked in `Package.resolved` and the Xcode workspace's SwiftPM lock.
 
@@ -84,8 +103,8 @@ claimed in-app and open the requested native screen.
 
 ### Switching on Apple, Google and passkeys
 
-These methods are implemented (Wire conformers, models, UI states, stub-transport tests) but show
-"Not available yet" because the build carries none of the account-held configuration. Nothing here is
+These methods are implemented (Wire conformers, models, UI states, stub-transport tests) but stay
+hidden, with an unavailable-methods note, because the build carries none of the account-held configuration. Nothing here is
 invented or committed; supply, per method:
 
 - **Sign in with Apple:** a signing team, the "Sign in with Apple" capability
@@ -230,7 +249,7 @@ question that personal data is deleted while aggregate/receipt records required 
 retained.
 
 **Privacy disclosure (App Store Privacy "nutrition label").** The app collects: email and phone
-(account), approximate location via ZIP (streak day boundary, nearby events), and gift history.
+(account), name (signup and public sharing), approximate location via ZIP (streak day boundary, nearby events), and gift history.
 No third-party analytics SDK is embedded — analytics events go only to the first-party DAD-Main
 ingest endpoint, and only after the donor allows them. No tracking across apps/sites; no IDFA. Declare Contact Info,
 Coarse Location, and Financial Info as "used for app functionality", and Product Interaction as "analytics",
@@ -281,13 +300,14 @@ exercised only at archive/submission time. Pre-submission:
 ## Scale (50,000 users now, 1,000,000 within a year)
 
 - **Nothing polls.** Screens read on open and on explicit refresh; there are no timers hitting the API. The one
-  bounded re-read loop runs after the hosted checkout sheet closes. A cold launch costs a profile read, the
-  dashboard and today's initiative reads, and one push-device registration; steady state is a handful of requests
-  per user per day.
+  bounded re-read loop runs after the hosted checkout sheet closes. Home reads the profile, dashboard,
+  today's initiative, recurring gift, payment status and (when subscribed) amount offer, and registers an
+  available push token. Other tabs and Settings fetch their own sections when opened.
 - **Retries cannot storm.** Authenticated reads retry at most once after a 401 (single-flight refresh, so N
-  concurrent calls make one refresh request). Idempotent commands reuse their key on a retry and honor
-  `Retry-After`. Analytics back off exponentially and are capped at 500 buffered events.
-- **Payloads are bounded.** Responses are capped at 1 MiB, gift history pages at 50 rows (500 in memory), analytics
+  concurrent calls make one refresh request). Idempotent commands reuse their key on a retry; application
+  submission displays the server's `Retry-After` when provided. Analytics back off exponentially and are
+  capped at 500 buffered events, with a bounded 1,000-id local deduplication window.
+- **Payloads are bounded.** Responses are capped at 1 MiB (partner PDFs at 16 MiB), gift history pages at 50 rows (500 in memory), analytics
   batches at 100 events.
 - **Server-side pressure to plan for.** A push-driven open (an event reminder to all attendees) arrives within
   seconds, so the dashboard, initiative and registration endpoints need headroom for a launch-minute burst; the
@@ -296,11 +316,12 @@ exercised only at archive/submission time. Pre-submission:
 
 ## Analytics and push (contract 2.9.0)
 
-**Analytics are opt-in**, worded and counted as on the website. The start screen asks once ("Allow usage
+**Analytics are opt-in**, worded and counted as on the website. The signed-in donor shell asks once ("Allow usage
 analytics?") and Settings has a "Usage analytics" switch; until the donor allows it nothing is recorded. Events go
 only to DAD-Main's `ingestAnalytics` (first party, `X-DAD-Platform: IOS`, attributed to the donor when signed in)
 through `AnalyticsRecorder`, in batches of up to 100 with a stable id each so a retried batch is not double-counted;
-declining drops anything still buffered. Offline, at most 500 events are kept (oldest dropped), and after a failed
+declining drops anything still buffered and prevents queued batches from starting; an upload already in flight
+may finish. Offline, at most 500 events are kept (oldest dropped), and after a failed
 upload new events do not retry until an exponential backoff (30 s doubling to 15 min) has passed. The app emits `app_opened`, `role_selected`, `invite_shared`
 (`share_sheet` / `copy`), `irl_code_shown` and `push_opened`; every other event is derived from the successful API
 call it stands for by the same rules as the website's `observeAPI` (`ObservingTransport`), e.g. `signup_started`
