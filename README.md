@@ -43,8 +43,9 @@ node --test scripts/check-secrets-config.test.mjs
 
 The last two commands require Gitleaks 8.30.0+ (CI installs the pinned binary). The secret-scan
 job also tests that its reviewed fixture exceptions cannot hide another credential in the same file.
-Settings includes About DAD with the running app's version and build number; sample-account copy
-appears only in Debug previews and stub-backed runs.
+Settings includes About DAD with the running app's version and build number. The pinned R1 contract
+accepts test payments only, which About states in every build; sample-account copy appears only in
+Debug previews and stub-backed runs.
 
 ## Shared contract and native boundaries
 

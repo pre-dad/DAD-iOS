@@ -138,13 +138,15 @@ struct AccountSettingsScreen: View {
             Text("Version \(version) (\(build))").font(.footnote).foregroundStyle(.secondary)
                 .accessibilityIdentifier("settings-version")
             Text("Give monthly, see your impact, invite friends, and volunteer in your community.").font(.footnote)
+            Text("Test payments only · Gift records are not tax receipts.").font(.footnote).foregroundStyle(.secondary)
+                .accessibilityIdentifier("settings-payment-note")
             if let raw = Bundle.main.object(forInfoDictionaryKey: "DADPublicOrigin") as? String,
                let origin = PublicOrigin.resolve(raw).flatMap(URL.init(string:)), !raw.isEmpty {
                 Link("DAD website", destination: origin)
             }
             #if DEBUG
             if launchFlag("--stub-backend") || (Bundle.main.object(forInfoDictionaryKey: "DADAPIOrigin") as? String ?? "").isEmpty {
-                Text("Preview · Sample account and test payments").font(.footnote).foregroundStyle(.secondary)
+                Text("Preview · Sample account").font(.footnote).foregroundStyle(.secondary)
                     .accessibilityIdentifier("settings-preview-note")
             }
             #endif
