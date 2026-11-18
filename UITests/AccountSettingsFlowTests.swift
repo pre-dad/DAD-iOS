@@ -13,6 +13,8 @@ import XCTest
         XCTAssertTrue(app.staticTexts["settings-email"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.switches["ranking-toggle"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.switches["pref-push_streak_at_risk"].exists)
+        XCTAssertTrue(app.staticTexts["settings-version"].exists)
+        XCTAssertTrue(app.staticTexts["settings-preview-note"].exists)
     }
 
     func testDeleteGateDisabledUntilConfirmWordTyped() {
@@ -90,6 +92,12 @@ import XCTest
 
         XCTAssertTrue(app.buttons["settings-signout"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["delete-start"].exists)
+        for _ in 0..<10 where !app.buttons["settings-signout"].isHittable { app.swipeUp() }
+        XCTAssertTrue(app.buttons["settings-signout"].isHittable, "sign-out remains reachable at the largest text size")
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Settings largest text"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
     }
 
     func testVolunteerInterestsCanBeAddedAndRemoved() {

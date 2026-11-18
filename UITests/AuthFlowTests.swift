@@ -19,6 +19,8 @@ import XCTest
         // Phone + SMS code screen renders with its phone field.
         XCTAssertTrue(app.staticTexts["Sign in with your phone"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.textFields["Phone number"].exists)
+        app.buttons["Back"].tap()
+        XCTAssertTrue(app.buttons["Continue with phone"].waitForExistence(timeout: 5), "a donor can choose another sign-in method")
     }
 
     /// A valid phone number advances to code entry, and Send code stays disabled for junk input.

@@ -131,6 +131,7 @@ private struct SignInMethods: View {
 /// Phone + SMS one-time-code journey, bound to `PhoneSignInModel`.
 private struct PhoneSignIn: View {
     @State var model: PhoneSignInModel
+    let onBack: () -> Void
     let onSignedIn: () -> Void
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -159,6 +160,8 @@ private struct PhoneSignIn: View {
                     .disabled(!model.canRequestCode)
             }
             if model.phase == .requestingCode || isVerifying { ProgressView() }
+            Button("Back", action: onBack).buttonStyle(DADButtonStyle(.secondary))
+                .disabled(model.phase == .requestingCode || isVerifying)
         }
         .frame(maxWidth: 520, alignment: .leading).padding(28).frame(maxWidth: .infinity)
         .accessibilityElement(children: .contain).accessibilityIdentifier("phone-sign-in")
@@ -421,7 +424,7 @@ struct UnauthenticatedStack: View {
         case .methods:
             SignInMethods(capabilities: kit.capabilities, onSelect: select, onCreateAccount: { step = .signup })
         case .phone:
-            PhoneSignIn(model: PhoneSignInModel(service: kit.phone, establish: establish), onSignedIn: onSignedIn)
+            PhoneSignIn(model: PhoneSignInModel(service: kit.phone, establish: establish), onBack: { step = .methods }, onSignedIn: onSignedIn)
         case .password:
             PasswordSignIn(model: PasswordSignInModel(service: kit.password, establish: establish),
                            onBack: { step = .methods }, onSignedIn: onSignedIn)
@@ -439,6 +442,11 @@ struct UnauthenticatedStack: View {
                                   onTokenConsumed: onPartnerTokenConsumed, onBack: { step = .roleSelect }, onSignedIn: onPartnerSignedIn,
                                   applyURL: publicOrigin?.appending(path: "apply"),
                                   applicationStatus: applicationStatus, applicationSubmit: applicationSubmit)
+            } else {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Partner sign-in isn’t available in this build.")
+                    Button("Back") { step = .roleSelect }.buttonStyle(DADButtonStyle(.secondary))
+                }.padding(28)
             }
         }
     }

@@ -199,7 +199,6 @@ public struct DADGiftFraming: View {
             Text(daily)
         }
         .font(.body.weight(.semibold))
-        .foregroundStyle(Color.dad("ink"))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(monthly) · \(daily)")
     }

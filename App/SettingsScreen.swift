@@ -131,10 +131,23 @@ struct AccountSettingsScreen: View {
             }
         }
 
-        // Account: the single quiet preview footnote lives here (not per card).
-        section("Account") {
-            Text("Preview build · test payments only").font(.footnote).foregroundStyle(.secondary)
-                .accessibilityIdentifier("settings-preview-note")
+        section("About DAD") {
+            Text("Dynamic Aid Delivery, INC.").font(.headline)
+            let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+            let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
+            Text("Version \(version) (\(build))").font(.footnote).foregroundStyle(.secondary)
+                .accessibilityIdentifier("settings-version")
+            Text("Give monthly, see your impact, invite friends, and volunteer in your community.").font(.footnote)
+            if let raw = Bundle.main.object(forInfoDictionaryKey: "DADPublicOrigin") as? String,
+               let origin = PublicOrigin.resolve(raw).flatMap(URL.init(string:)), !raw.isEmpty {
+                Link("DAD website", destination: origin)
+            }
+            #if DEBUG
+            if launchFlag("--stub-backend") || (Bundle.main.object(forInfoDictionaryKey: "DADAPIOrigin") as? String ?? "").isEmpty {
+                Text("Preview · Sample account and test payments").font(.footnote).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("settings-preview-note")
+            }
+            #endif
         }
 
         // Sign out + Delete account in a separate bottom section.

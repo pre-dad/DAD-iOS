@@ -406,7 +406,9 @@ struct GiftHistoryScreen: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("\(String(summary.year)) total").font(.footnote).foregroundStyle(.secondary)
                             Text(summary.netLabel).font(.title2.bold()).accessibilityIdentifier("history-year-total")
-                            Text("Sandbox records, not tax receipts.").font(.caption).foregroundStyle(.secondary)
+                            if !summary.taxReceipt {
+                                Text("Sandbox records, not tax receipts.").font(.caption).foregroundStyle(.secondary)
+                            }
                         }
                     }
                 }
