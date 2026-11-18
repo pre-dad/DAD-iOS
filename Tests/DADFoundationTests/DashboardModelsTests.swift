@@ -273,3 +273,14 @@ private let sampleToday = TodayInitiative(id: "i", slug: "s", title: "Meals", su
         XCTAssertNil(model.receipt)
     }
 }
+
+final class MilestoneLineTests: XCTestCase {
+    func testEachMilestoneSaysWhatItReached() {
+        XCTAssertEqual(milestoneLine(days: 7), "7 days. A full week of aid, on the record.")
+        XCTAssertEqual(milestoneLine(days: 30), "30 days. That’s a month of aid, on the record.")
+        XCTAssertEqual(milestoneLine(days: 100), "100 days. Triple digits, on the record.")
+        XCTAssertEqual(milestoneLine(days: 365), "365 days. A full year of aid, on the record.")
+        XCTAssertEqual(milestoneLine(days: 500), "500 days. Every one on the record.")
+        XCTAssertEqual(milestoneLine(days: 1_095), "1095 days. Every one on the record.")
+    }
+}

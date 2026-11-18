@@ -25,6 +25,18 @@ public struct StreakLadder: Sendable, Equatable {
     }
 }
 
+/// The celebration line for a streak milestone (S-3), worded as on Android: the first milestones have
+/// their own lines, and every later one counts its days.
+public func milestoneLine(days: Int) -> String {
+    switch days {
+    case 7: "7 days. A full week of aid, on the record."
+    case 30: "30 days. That’s a month of aid, on the record."
+    case 100: "100 days. Triple digits, on the record."
+    case 365: "365 days. A full year of aid, on the record."
+    default: "\(days) days. Every one on the record."
+    }
+}
+
 public struct StreakCard: Sendable, Equatable {
     public let current: Int
     /// A renewal failed and the donor is inside the 7-day grace period (S-1).

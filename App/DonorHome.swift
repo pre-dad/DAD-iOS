@@ -245,7 +245,7 @@ private struct DashboardCards: View {
     /// Milestone-reached (streak crossed a milestone since last launch): a dismissible inline card with
     /// a share action — NOT a modal. First sight also fires the success haptic.
     @ViewBuilder private func milestoneCard(_ reached: Int) -> some View {
-        let message = "\(reached) days. That’s a month of aid, on the record."
+        let message = milestoneLine(days: reached)
         DADCard {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top) {
