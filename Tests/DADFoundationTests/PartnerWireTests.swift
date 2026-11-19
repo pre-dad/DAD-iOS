@@ -24,6 +24,23 @@ final class WirePartnerStatusTests: XCTestCase {
         ("retained", "/donor/partner/reports/r1/report.pdf", { _ = try await $0.retainedReport(id: "r1") }),
     ]
 
+    func testReportLimitsKeepTheSessionAndExplainTheRefusal() async throws {
+        for (status, code, expected) in [
+            (HTTPResponse.Status.tooManyRequests, "PARTNER_REPORT_DAILY_LIMIT", PartnerReportLimit.daily),
+            (.conflict, "PARTNER_REPORT_STORAGE_LIMIT", .storage),
+            (.contentTooLarge, "PARTNER_REPORT_TOO_LARGE", .tooLarge),
+        ] {
+            let transport = ScriptedTransport { _, _ in (status, "{\"detail\":\"Limit reached\",\"code\":\"\(code)\"}") }
+            let store = MemoryStore(nil)
+            let session = try PartnerSession(store: store)
+            try await session.install(token: "PB")
+            let wire = WirePartner(origin: testOrigin, transport: transport, session: session)
+            do { _ = try await wire.report(); XCTFail() }
+            catch { XCTAssertEqual(error as? PartnerReportLimit, expected) }
+            XCTAssertNotNil(try store.load())
+        }
+    }
+
     private func expected(_ status: Int) -> AccountError {
         switch status {
         case 401: return .signedOut

@@ -85,7 +85,7 @@ public struct WireAccountSettings: AccountSettingsService {
 
     static func snapshot(_ p: Components.Schemas.Profile) throws -> AccountSettingsSnapshot {
         AccountSettingsSnapshot(
-            profile: AccountProfileSummary(email: p.email, accountRole: p.account_role.rawValue, zip: p.zip, city: p.city, phone: p.phone),
+            profile: AccountProfileSummary(email: p.email, accountRole: p.account_role.rawValue, zip: p.zip, city: p.city, phone: p.phone, timezone: p.timezone, timezoneOverride: p.timezone_override),
             preferences: AccountPreferences(
                 version: Int(p.version), referralEmails: p.referral_emails, marketingEmails: p.marketing_emails,
                 pushReferralConverted: p.push_referral_converted, pushStreakAtRisk: p.push_streak_at_risk,

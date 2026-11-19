@@ -119,17 +119,19 @@ public struct PartnerPeople: Sendable, Equatable {
     public let givenMinor: Int64
     public let matchedMinor: Int64
     public let avgStreakDays: Int64
+    public let streakVerified: Bool
     public let volunteerMinutes: Int64
     public let teams: Int64
     public let suppressed: Bool
 
     public init(enrolled: Int64, workforceSize: Int, givenMinor: Int64, matchedMinor: Int64,
-                avgStreakDays: Int64, volunteerMinutes: Int64, teams: Int64, suppressed: Bool) {
+                avgStreakDays: Int64, volunteerMinutes: Int64, teams: Int64, suppressed: Bool, streakVerified: Bool = false) {
         self.enrolled = enrolled
         self.workforceSize = workforceSize
         self.givenMinor = givenMinor
         self.matchedMinor = matchedMinor
         self.avgStreakDays = avgStreakDays
+        self.streakVerified = streakVerified
         self.volunteerMinutes = volunteerMinutes
         self.teams = teams
         self.suppressed = suppressed

@@ -4,6 +4,17 @@ import Foundation
 // role-gated actions and push register/unregister, so they are unit-tested without a network or UI —
 // the same shape as the donor models (C/D/E).
 
+public enum PartnerReportLimit: Error, Sendable, Equatable {
+    case daily, storage, tooLarge
+    public var message: String {
+        switch self {
+        case .daily: "This organization has reached today’s report limit. Try after midnight UTC. Existing reports remain available."
+        case .storage: "Report storage is full. Download an existing report or contact DAD support."
+        case .tooLarge: "This report is too large to export. Existing reports remain available; contact DAD support."
+        }
+    }
+}
+
 /// The seam the partner models call. A conformer maps to the generated client under the 12-hour
 /// partner session (`WirePartner`) or a preview/test double; all value types so the models stay testable.
 public protocol PartnerService: Sendable {
@@ -192,6 +203,8 @@ public final class PartnerModel {
             actionError = invalid
         } catch AccountError.conflict where conflict != nil {
             actionError = conflict
+        } catch let limit as PartnerReportLimit {
+            actionError = limit.message
         } catch AccountError.forbidden {
             actionError = "Only an admin can do that."
         } catch {

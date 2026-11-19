@@ -8,20 +8,23 @@ import Foundation
 // MARK: - Profile summary (read-only header)
 
 /// The account header settings shows. `accountRole` is fixed at creation and immutable (D-1), so
-/// it is display-only; `zip` drives the streak's local-day rollover (§10).
+/// it is display-only; the saved time zone controls the streak’s local-day rollover (§10).
 public struct AccountProfileSummary: Sendable, Equatable {
     public let email: String
     public let accountRole: String
     public let zip: String?
     public let city: String?
     public let phone: String?
+    public let timezone: String?
+    public let timezoneOverride: String?
 
-    public init(email: String, accountRole: String, zip: String?, city: String?, phone: String?) {
+    public init(email: String, accountRole: String, zip: String?, city: String?, phone: String?, timezone: String? = nil, timezoneOverride: String? = nil) {
         self.email = email
         self.accountRole = accountRole
         self.zip = zip
         self.city = city
         self.phone = phone
+        self.timezone = timezone; self.timezoneOverride = timezoneOverride
     }
 
     public var zipLabel: String {

@@ -62,6 +62,10 @@ for (const [name, property] of openPartnerEnums) {
   if (!property?.enum) throw new Error(`${name} enum not found`);
   delete property.enum;
 }
+// The generator cannot name the empty-string reset enum; validate choices in the wire layer.
+const zone = spec.paths["/donor/me/profile"].post.requestBody.content["application/json"].schema.properties.timezone_override;
+if (!zone?.enum?.includes("")) throw new Error("Time zone reset contract changed");
+delete zone.enum;
 await writeFile("Sources/DADFoundation/openapi.json", `${JSON.stringify(spec, null, 2)}\n`);
 const config = await readFile("Sources/DADFoundation/openapi-generator-config.yaml", "utf8");
 if (!config.includes("operations:")) throw new Error("Client scope must be explicit");

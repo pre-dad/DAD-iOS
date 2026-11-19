@@ -487,9 +487,9 @@ private final class StubTransport: ClientTransport, @unchecked Sendable {
             return reply(.ok, #"{"categories":[{"category":"Water","amount_minor":1800000},{"category":"Housing","amount_minor":1200000}]}"#)
         case (.get, "/donor/partner/our-people"):
             let workforce = lock.withLock { partnerWorkforce }
-            return reply(.ok, #"{"enrolled":86,"workforce_size":\#(workforce),"given_minor":940000,"matched_minor":470000,"avg_streak_days":42,"volunteer_minutes":6300,"teams":2,"suppressed":false}"#)
+            return reply(.ok, #"{"enrolled":86,"workforce_size":\#(workforce),"streak_verified":true,"given_minor":940000,"matched_minor":470000,"avg_streak_days":42,"volunteer_minutes":6300,"teams":2,"suppressed":false}"#)
         case (.get, "/donor/partner/teams"):
-            return reply(.ok, #"{"teams":[{"team_id":"t1","name":"Engineering","active_givers":31,"annualized_minor":1200000,"avg_streak_days":40,"volunteer_minutes":1200},{"team_id":"t2","name":"Sales","active_givers":12,"annualized_minor":600000,"avg_streak_days":18,"volunteer_minutes":300}]}"#)
+            return reply(.ok, #"{"teams":[{"team_id":"t1","name":"Engineering","metrics_verified":true,"active_givers":31,"annualized_minor":1200000,"avg_streak_days":40,"volunteer_minutes":1200},{"team_id":"t2","name":"Sales","metrics_verified":true,"active_givers":12,"annualized_minor":600000,"avg_streak_days":18,"volunteer_minutes":300}]}"#)
         case (.get, "/donor/partner/users"):
             return reply(.ok, #"{"users":[\#(lock.withLock { partnerUsers }.joined(separator: ","))]}"#)
         case (.post, "/donor/partner/users"):
@@ -593,7 +593,7 @@ private final class StubTransport: ClientTransport, @unchecked Sendable {
             let (org, name) = lock.withLock { (employer, team) }
             guard let org else { return reply(.ok, #"{"partner_id":"","organization":"","leaderboard":[]}"#) }
             let mine = name.map { #","team_id":"33333333-3333-4333-8333-333333333333","team_name":"\#($0)""# } ?? ""
-            return reply(.ok, #"{"partner_id":"44444444-4444-4444-8444-444444444444","organization":"\#(org)"\#(mine),"leaderboard":[{"team_id":"55555555-5555-4555-8555-555555555555","name":"Design","active_givers":7,"annualized_minor":420000,"avg_streak_days":21,"volunteer_minutes":180}]}"#)
+            return reply(.ok, #"{"partner_id":"44444444-4444-4444-8444-444444444444","organization":"\#(org)"\#(mine),"leaderboard":[{"team_id":"55555555-5555-4555-8555-555555555555","name":"Design","metrics_verified":true,"active_givers":7,"annualized_minor":420000,"avg_streak_days":21,"volunteer_minutes":180}]}"#)
         case (.post, "/donor/me/employer"):
             guard fields["company_code"] as? String == "ACME42" else { return reply(.unprocessableContent, "{}") }
             lock.withLock { employer = "Acme" }

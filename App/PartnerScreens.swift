@@ -340,7 +340,8 @@ private struct PartnerPeopleSection: View {
                     Text("Enrolled: \(people.enrolled) of \(people.workforceSize)")
                     if let given = people.givenLabel { Text("Given: \(given)").accessibilityIdentifier("partner-given") }
                     if let matched = people.matchedLabel { Text("Matched: \(matched)") }
-                    Text("Average streak: \(people.avgStreakDays) days")
+                    if people.streakVerified { Text("Average streak: \(people.avgStreakDays) days") }
+                    else { Text("Streak figures are awaiting verification.") }
                     Text("Volunteered: \(people.volunteerMinutes / 60) hours")
                 }
             }
@@ -350,8 +351,13 @@ private struct PartnerPeopleSection: View {
                 Text("Teams").font(.title3.bold()).accessibilityAddTraits(.isHeader)
                 Text("Teams with fewer than 5 people are left out.").font(.footnote).foregroundStyle(.secondary)
                 ForEach(Array(teams.enumerated()), id: \.element.id) { index, team in
-                    Text("\(index + 1). \(team.name) · \(team.activeGivers) givers · \(formatUSDMinor(Int(team.annualizedMinor)))/yr")
-                        .accessibilityIdentifier("partner-team-\(team.id)")
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(teams.allSatisfy(\.metricsVerified) ? "\(index + 1). \(team.name)" : team.name)
+                        if team.metricsVerified {
+                            Text("\(team.activeGivers) givers · \(formatUSDMinor(Int(team.annualizedMinor)))/yr")
+                        } else { Text("Giving and streak figures are awaiting verification.") }
+                        Text("Volunteered: \(team.volunteerMinutes / 60) hours")
+                    }.accessibilityElement(children: .combine).accessibilityIdentifier("partner-team-\(team.id)")
                 }
             }
         }

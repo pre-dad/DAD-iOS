@@ -42,10 +42,10 @@ private actor FakeManagement: AccountManagementService {
     func fail(_ error: AccountError?) { failure = error }
     private func check() throws { if let failure { throw failure } }
 
-    func saveProfile(zip: String, city: String, phone: String) async throws -> AccountProfileSummary {
+    func saveProfile(zip: String, city: String, phone: String, timezoneOverride: String?) async throws -> AccountProfileSummary {
         try check()
         saved.append((zip, city, phone))
-        return AccountProfileSummary(email: "alex@example.org", accountRole: "DONOR", zip: zip, city: city, phone: phone.isEmpty ? nil : phone)
+        return AccountProfileSummary(email: "alex@example.org", accountRole: "DONOR", zip: zip, city: city, phone: phone.isEmpty ? nil : phone, timezone: timezoneOverride, timezoneOverride: timezoneOverride?.isEmpty == false ? timezoneOverride : nil)
     }
     func requestEmailChange(to email: String) async throws { try check(); emailRequests.append(email) }
     func sessions() async throws -> [DeviceSessionSummary] { try check(); return list }
@@ -91,6 +91,22 @@ private actor FakeManagement: AccountManagementService {
         XCTAssertEqual(saved.first?.2, "+14155550123")
         XCTAssertEqual(model.profile.zip, "78702")
         XCTAssertFalse(model.canSave, "the saved values are the new baseline")
+    }
+
+    func testTimezoneOnlyCorrectionAndResetAreSavedChanges() async {
+        let service = FakeManagement()
+        let model = ProfileDetailsModel(profile: profile, service: service)
+        model.timezoneOverride = "America/Phoenix"
+        XCTAssertTrue(model.canSave)
+        await model.save()
+        XCTAssertEqual(model.profile.timezoneOverride, "America/Phoenix")
+        XCTAssertFalse(model.canSave)
+        model.timezoneOverride = ""
+        await model.save()
+        XCTAssertNil(model.profile.timezoneOverride)
+        XCTAssertFalse(model.canSave)
+        model.timezoneOverride = "Unsupported/Zone"
+        XCTAssertFalse(model.canSave)
     }
 
     func testProfileRejectedByServerExplainsItself() async {
@@ -217,6 +233,22 @@ final class WireAccountManagementTests: XCTestCase {
         XCTAssertEqual(try sent(call), ["zip": "78701", "city": "Austin", "phone": ""])
     }
 
+    func testTimezoneCorrectionResetAndOmissionUseDistinctWireValues() async throws {
+        let transport = ScriptedTransport { _, _ in
+            (.ok, profileJSON().replacingOccurrences(of: "\"timezone\":null", with: "\"timezone\":\"America/Phoenix\",\"timezone_override\":\"America/Phoenix\""))
+        }
+        let (wire, _, _) = try make(transport)
+        let saved = try await wire.saveProfile(zip: "78701", city: "Austin", phone: "", timezoneOverride: "America/Phoenix")
+        XCTAssertEqual(saved.timezoneOverride, "America/Phoenix")
+        XCTAssertEqual(saved.timezone, "America/Phoenix")
+        XCTAssertEqual(try sent(transport.calls(to: "/donor/me/profile").last)["timezone_override"], "America/Phoenix")
+        _ = try await wire.saveProfile(zip: "78701", city: "Austin", phone: "", timezoneOverride: "")
+        XCTAssertEqual(try sent(transport.calls(to: "/donor/me/profile").last)["timezone_override"], "")
+        do { _ = try await wire.saveProfile(zip: "", city: "", phone: "", timezoneOverride: "Invalid/Zone"); XCTFail() }
+        catch { XCTAssertEqual(error as? AccountError, .invalidInput) }
+        XCTAssertEqual(transport.calls(to: "/donor/me/profile").count, 2)
+    }
+
     func testSaveProfile422IsInvalidInput() async throws {
         let (wire, _, _) = try make(ScriptedTransport { _, _ in (.unprocessableContent, "{}") })
         do { _ = try await wire.saveProfile(zip: "1", city: "", phone: ""); XCTFail() }
@@ -268,12 +300,13 @@ final class WireAccountManagementTests: XCTestCase {
         XCTAssertEqual(none, EmployerTeam(organization: nil, teamName: nil, leaderboard: []))
 
         let linked = try make(ScriptedTransport { _, _ in
-            (.ok, #"{"partner_id":"p","organization":"Acme","team_id":"t","team_name":"Platform","leaderboard":[{"team_id":"t","name":"Platform","active_givers":6,"annualized_minor":360000,"avg_streak_days":12,"volunteer_minutes":90}]}"#)
+            (.ok, #"{"partner_id":"p","organization":"Acme","team_id":"t","team_name":"Platform","leaderboard":[{"team_id":"t","name":"Platform","metrics_verified":true,"active_givers":6,"annualized_minor":360000,"avg_streak_days":12,"volunteer_minutes":90}]}"#)
         })
         let team = try await linked.0.employer()
         XCTAssertEqual(team.organization, "Acme")
         XCTAssertEqual(team.teamName, "Platform")
         XCTAssertEqual(team.leaderboard.first?.activeGivers, 6)
+        XCTAssertEqual(team.leaderboard.first?.metricsVerified, true)
     }
 
     func testEnrollAndJoinTeamStatusMapping() async throws {

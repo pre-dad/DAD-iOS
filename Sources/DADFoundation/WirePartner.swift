@@ -224,7 +224,7 @@ public struct WirePartner: PartnerService {
                 let p = try response.body.json
                 return PartnerPeople(enrolled: p.enrolled, workforceSize: p.workforce_size, givenMinor: p.given_minor,
                                      matchedMinor: p.matched_minor, avgStreakDays: p.avg_streak_days,
-                                     volunteerMinutes: p.volunteer_minutes, teams: p.teams, suppressed: p.suppressed)
+                                     volunteerMinutes: p.volunteer_minutes, teams: p.teams, suppressed: p.suppressed, streakVerified: p.streak_verified)
             case .unauthorized: throw AccountError.signedOut
             case .forbidden: throw AccountError.forbidden
             case .tooManyRequests: throw AccountError.rateLimited
@@ -240,7 +240,7 @@ public struct WirePartner: PartnerService {
             case .ok(let response):
                 return try response.body.json.teams.map {
                     TeamStanding(id: $0.team_id, name: $0.name, activeGivers: $0.active_givers, annualizedMinor: $0.annualized_minor,
-                                 avgStreakDays: $0.avg_streak_days, volunteerMinutes: $0.volunteer_minutes)
+                                 avgStreakDays: $0.avg_streak_days, volunteerMinutes: $0.volunteer_minutes, metricsVerified: $0.metrics_verified)
                 }
             case .unauthorized: throw AccountError.signedOut
             case .forbidden: throw AccountError.forbidden
@@ -383,7 +383,13 @@ public struct WirePartner: PartnerService {
             case .ok(let response): return Data(try await ArraySlice<UInt8>(collecting: response.body.pdf, upTo: 16 * 1_048_576))
             case .unauthorized: throw AccountError.signedOut
             case .forbidden: throw AccountError.forbidden
-            case .tooManyRequests: throw AccountError.rateLimited
+            case .conflict(let response):
+                if (try? response.body.json.code) == "PARTNER_REPORT_STORAGE_LIMIT" { throw PartnerReportLimit.storage }
+                throw AccountError.conflict
+            case .contentTooLarge: throw PartnerReportLimit.tooLarge
+            case .tooManyRequests(let response):
+                if (try? response.body.json.code) == "PARTNER_REPORT_DAILY_LIMIT" { throw PartnerReportLimit.daily }
+                throw AccountError.rateLimited
             case .undocumented(let status, _): throw AccountError.forStatus(status)
             default: throw AccountError.unavailable
             }

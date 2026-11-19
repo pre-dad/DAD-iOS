@@ -13,9 +13,10 @@ public struct WireAccountManagement: AccountManagementService {
 
     init(product: ProductClient) { self.product = product }
 
-    public func saveProfile(zip: String, city: String, phone: String) async throws -> AccountProfileSummary {
-        try await product.perform { client in
-            switch try await client.saveProfile(.init(body: .json(.init(zip: zip, city: city, phone: phone)))) {
+    public func saveProfile(zip: String, city: String, phone: String, timezoneOverride: String?) async throws -> AccountProfileSummary {
+        if let timezoneOverride, !StreakTimeZone.choices.contains(where: { $0.value == timezoneOverride }) { throw AccountError.invalidInput }
+        return try await product.perform { client in
+            switch try await client.saveProfile(.init(body: .json(.init(zip: zip, city: city, phone: phone, timezone_override: timezoneOverride)))) {
             case .ok(let response): return try WireAccountSettings.snapshot(response.body.json).profile
             case .unauthorized: throw AccountError.signedOut
             case .unprocessableContent: throw AccountError.invalidInput
@@ -99,7 +100,7 @@ public struct WireAccountManagement: AccountManagementService {
                     teamName: body.team_name.flatMap { $0.isEmpty ? nil : $0 },
                     leaderboard: body.leaderboard.map {
                         TeamStanding(id: $0.team_id, name: $0.name, activeGivers: $0.active_givers, annualizedMinor: $0.annualized_minor,
-                                     avgStreakDays: $0.avg_streak_days, volunteerMinutes: $0.volunteer_minutes)
+                                     avgStreakDays: $0.avg_streak_days, volunteerMinutes: $0.volunteer_minutes, metricsVerified: $0.metrics_verified)
                     })
             case .unauthorized: throw AccountError.signedOut
             case .tooManyRequests: throw AccountError.rateLimited

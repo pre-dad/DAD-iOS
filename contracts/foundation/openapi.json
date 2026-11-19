@@ -7,7 +7,7 @@
    "name": "MIT",
    "identifier": "MIT"
   },
-  "description": "The DAD (Dynamic Aid Delivery) donor API, serving the web app, the donor iOS/Android app, and the staff back office.\n\n## Clients and authentication\n- **Browsers** authenticate with HttpOnly cookies. Every mutation must carry the exact configured `Origin`; this is the CSRF defense. The API sends no CORS headers.\n- **The donor app** sends `X-DAD-Client: native` on every request, never sends `Origin` or cookies, and authenticates with `Authorization: Bearer <access token>`. A request with Origin or cookies is a browser request whatever else it carries. Sign in by calling POST /donor/login, opening the emailed `/account/claim#token=\u2026` link in the app, and sending the fragment's token to POST /donor/claim as a native request, which returns a 15-minute access token and a rotating refresh token. Exchange the refresh token at POST /donor/refresh when the access token expires or a request answers 401; send one refresh at a time and keep only the newest tokens. Routes that admit the app list `native` in `x-clients`, and POST /donor/refresh, the push-device routes, POST /donor/me/company-touch, and POST /donor/me/recurring/checkout admit nothing else. The app may record referral and company-code link visits, keeping the returned token in place of the browser's cookie. Guest giving, partner applications, and every staff route are web-only.\n- **Partner portal** users are separate from donors (P-5). They sign in by calling POST /donor/partner/sign-in and opening the emailed `/partner/accept#token=\u2026` link, whose token POST /donor/partner/accept-invite exchanges for a 12-hour session: an HttpOnly cookie for a browser (`__Host-dad_partner_session` over HTTPS, otherwise `dad_partner_session`), or a bearer token for a native request, sent like the donor app's.\n- Staff routes are browser-only and never accept bearer tokens. The back office runs on its own host (`DONOR_STAFF_ORIGIN`): staff mutations require that exact `Origin`, and donor and public mutations require the public one, so neither site can act on the other.\n\n## Rate limits\nMutations are rate limited per client address and class (`x-rate-limit`): auth 10/min, visitor 60/min, account 30/min, staff 60/min, with bursts up to the same size. Exceeding one answers 429 with `Retry-After`. Reads are not rate limited by the API.\n\n## Conventions\n- Errors are always `application/json` `{\"detail\": \"\u2026\"}` with the status below; the detail is safe to display. A 503 for a feature the deployment has not configured adds a stable `code` and should not be retried. Unknown routes and malformed record IDs answer 404, wrong methods 405 with `Allow`.\n- Request bodies are one JSON object with exactly the documented fields (unknown fields, trailing data, NUL characters, and `null` for a defaulted field are 422), at most 256 KiB unless stated (larger is 413).\n- Money is integer USD cents in fields ending `_minor`; the API shows the same numbers on every client.\n- Timestamps are RFC 3339 strings, UTC, possibly with fractional seconds (`2026-10-06T14:03:00Z`, `\u2026+00:00` in gift records). Dates are `YYYY-MM-DD`.\n- Lists page by `offset`, 50 rows per page; a response's `next_offset` (or `next_<list>_offset`) is the next page's offset, or null on the last page.\n- Commands that reach the payment processor or deliver email require an `Idempotency-Key`; retry with the same key after a timeout or 503.\n- Every response is `Cache-Control: no-store` except published content.\n"
+  "description": "The DAD (Dynamic Aid Delivery) donor API, serving the web app, the donor iOS/Android app, and the staff back office.\n\n## Clients and authentication\n- **Browsers** authenticate with HttpOnly cookies. Every mutation must carry the exact configured `Origin`; this is the CSRF defense. The API sends no CORS headers.\n- **The donor app** sends `X-DAD-Client: native` on every request, never sends `Origin` or cookies, and authenticates with `Authorization: Bearer <access token>`. A request with Origin or cookies is a browser request whatever else it carries. Sign in by calling POST /donor/login, opening the emailed `/account/claim#token=\u2026` link in the app, and sending the fragment's token to POST /donor/claim as a native request, which returns a 15-minute access token and a rotating refresh token. Exchange the refresh token at POST /donor/refresh when the access token expires or a request answers 401; send one refresh at a time and keep only the newest tokens. Routes that admit the app list `native` in `x-clients`, and POST /donor/refresh, the push-device routes, POST /donor/me/company-touch, and POST /donor/me/recurring/checkout admit nothing else. The app may record referral and company-code link visits, keeping the returned token in place of the browser's cookie. Giving requires a verified donor session. Native recurring checkout uses its dedicated operation; partner applications admit both browser and native clients. Every staff route is browser-only.\n- **Partner portal** users are separate from donors (P-5). They sign in by calling POST /donor/partner/sign-in and opening the emailed `/partner/accept#token=\u2026` link, whose token POST /donor/partner/accept-invite exchanges for a 12-hour session: an HttpOnly cookie for a browser (`__Host-dad_partner_session` over HTTPS, otherwise `dad_partner_session`), or a bearer token for a native request, sent like the donor app's.\n- Staff routes are browser-only and never accept bearer tokens. The back office runs on its own host (`DONOR_STAFF_ORIGIN`): staff mutations require that exact `Origin`, and donor and public mutations require the public one, so neither site can act on the other.\n\n## Rate limits\nMutations are rate limited per client address and class (`x-rate-limit`): auth 10/min, visitor 60/min, account 30/min, staff 60/min, with bursts up to the same size. Exceeding one answers 429 with `Retry-After`. Reads are not rate limited by the API.\n\n## Conventions\n- Errors are always `application/json` `{\"detail\": \"\u2026\"}` with the status below; the detail is safe to display. A 503 for a feature the deployment has not configured adds a stable `code` and should not be retried. Unknown routes and malformed record IDs answer 404, wrong methods 405 with `Allow`.\n- Request bodies are one JSON object with exactly the documented fields (unknown fields, trailing data, NUL characters, and `null` for a defaulted field are 422), at most 256 KiB unless stated (larger is 413).\n- Money is integer USD cents in fields ending `_minor`; the API shows the same numbers on every client.\n- Timestamps are RFC 3339 strings, UTC, possibly with fractional seconds (`2026-10-06T14:03:00Z`, `\u2026+00:00` in gift records). Dates are `YYYY-MM-DD`.\n- Lists page by `offset`, 50 rows per page; a response's `next_offset` (or `next_<list>_offset`) is the next page's offset, or null on the last page.\n- Commands that reach the payment processor or deliver email require an `Idempotency-Key`; retry with the same key after a timeout or 503.\n- Every response is `Cache-Control: no-store` except published content.\n"
  },
  "servers": [
   {
@@ -241,13 +241,20 @@
   "/donor/checkouts": {
    "post": {
     "operationId": "beginCheckout",
-    "summary": "Start a guest Stripe Checkout",
-    "description": "Web only: giving stays on the website. Reads the `dad_referral` cookie for attribution. 403 also means giving is unavailable for this account. 503 `PAYMENTS_UNCONFIGURED` when the deployment has no payment processor. Refused with 409 when the email signs in to a DAD partner or staff account: one email holds one role, so such a person gives with a different email. The email is not authenticated, so an earlier open, unpaid checkout for it is never handed back: starting again, with any new key, expires that session at Stripe (outside any database lock) and returns a new one for the requested amount, whether the amount is the same or not. A checkout begun in the last 15 seconds is left alone and answers `409`, as does one paid just as the request arrives or a monthly gift that is already active. At most 10 checkouts can be begun for one email in an hour: beyond that the answer is `429` with `Retry-After`. If expiring the earlier session fails the answer is a retryable `503` and nothing changes. Retrying with the same `Idempotency-Key` returns the same session; the key of a replaced checkout answers `409`.",
+    "summary": "Start Stripe Checkout for the signed-in donor",
+    "description": "Browser checkout requires a verified donor session. The submitted email must match the authenticated account; other addresses are rejected before identity or subscription lookup. Reads the dad_referral cookie for attribution. An anonymous, invalid, expired or revoked session receives 401. A monthly gift already active or begun in the last 15 seconds receives 409. Restarting an abandoned unpaid checkout expires it at Stripe outside the database lock before creating a replacement. Retrying the same Idempotency-Key returns the same session; a replaced key receives 409. At most ten starts per account email per hour; excess attempts receive 429 with Retry-After. Processor failures are retryable 503; PAYMENTS_UNCONFIGURED indicates a missing processor.",
     "tags": [
      "Public"
     ],
-    "security": [],
-    "x-rate-limit": "visitor",
+    "security": [
+     {
+      "cookieAuth": []
+     },
+     {
+      "bearerAuth": []
+     }
+    ],
+    "x-rate-limit": "account",
     "x-clients": [
      "browser"
     ],
@@ -266,7 +273,8 @@
          "email": {
           "type": "string",
           "format": "email",
-          "maxLength": 320
+          "maxLength": 320,
+          "description": "Must match the verified signed-in donor email; cannot select another account."
          },
          "amount_minor": {
           "type": "integer",
@@ -333,6 +341,9 @@
      },
      "503": {
       "$ref": "#/components/responses/Unavailable"
+     },
+     "401": {
+      "$ref": "#/components/responses/Unauthorized"
      }
     }
    }
@@ -501,7 +512,7 @@
    "post": {
     "operationId": "captureCompany",
     "summary": "Record a company-code visit",
-    "description": "Records a pre-signup visit through an employer's company code (30 days, last touch wins). A browser keeps the visitor token in the HttpOnly `dad_company` cookie, which binds when the donor proves account ownership in that browser. The app, opening the same link, sends the `token` from its previous capture, if any, and after sign-in sends the one returned to POST /donor/me/company-touch. A guest checkout cannot change an employer based on email alone. The code is normalised to upper case. The response never reveals whether the code resolves to a partner.",
+    "description": "Records a pre-signup visit through an employer's company code (30 days, last touch wins). A browser keeps the visitor token in the HttpOnly `dad_company` cookie, which binds when the donor proves account ownership in that browser. The app, opening the same link, sends the `token` from its previous capture, if any, and after sign-in sends the one returned to POST /donor/me/company-touch. Checkout requires a verified donor session and cannot change an employer based on a supplied email alone. The code is normalised to upper case. The response never reveals whether the code resolves to a partner.",
     "tags": [
      "Public"
     ],
@@ -768,7 +779,8 @@
           "description": "Page the emailed link returns to after sign-in. Optional; null or any other value is 422.",
           "enum": [
            "/account/payment-method",
-           "/account/dashboard"
+           "/account/dashboard",
+           "/donate"
           ]
          }
         },
@@ -1481,7 +1493,7 @@
    "post": {
     "operationId": "saveProfile",
     "summary": "Save identity profile fields",
-    "description": "Replaces the donor's self-service identity fields. `timezone` is derived from `zip` (US ZIP to IANA zone) and is never accepted from the client; `account_role` is immutable and cannot be set here. A field sent empty clears its stored value; a blank `zip` clears the derived `timezone` with it. 422 for an invalid ZIP, phone, or city.",
+    "description": "Replaces ZIP, city and phone. The ZIP suggests the IANA time zone. Optional timezone_override corrects that suggestion: omit it to preserve the saved choice, send an empty string to restore ZIP-based time, or choose a supported US zone. A blank ZIP clears only an automatically derived zone; a manual correction remains. account_role is immutable. 422 for invalid ZIP, phone, city or zone.",
     "tags": [
      "Donor"
     ],
@@ -1507,7 +1519,7 @@
         "properties": {
          "zip": {
           "type": "string",
-          "description": "US ZIP (`12345` or `12345-6789`). Empty clears the ZIP and derived timezone.",
+          "description": "US ZIP or ZIP+4. Empty clears the ZIP and its automatic zone; a manual time zone remains.",
           "pattern": "^$|^[0-9]{5}(-[0-9]{4})?$"
          },
          "city": {
@@ -1519,6 +1531,24 @@
           "type": "string",
           "description": "E.164 phone, e.g. `+14155550123`. Empty clears it.",
           "pattern": "^$|^\\+[1-9][0-9]{1,14}$"
+         },
+         "timezone_override": {
+          "type": "string",
+          "enum": [
+           "",
+           "America/New_York",
+           "America/Chicago",
+           "America/Denver",
+           "America/Phoenix",
+           "America/Los_Angeles",
+           "America/Anchorage",
+           "America/Adak",
+           "Pacific/Honolulu",
+           "America/Puerto_Rico",
+           "Pacific/Guam",
+           "Pacific/Pago_Pago"
+          ],
+          "description": "Omit to preserve the manual correction. Empty restores the ZIP suggestion. Controls the local midnight used by the streak."
          }
         },
         "additionalProperties": false
@@ -3786,7 +3816,7 @@
       }
      },
      {
-      "$ref": "#/components/parameters/Offset"
+      "$ref": "#/components/parameters/Cursor"
      }
     ],
     "responses": {
@@ -3914,7 +3944,7 @@
       "description": "A malformed ID is 404, like an unknown one."
      },
      {
-      "$ref": "#/components/parameters/Offset"
+      "$ref": "#/components/parameters/Cursor"
      }
     ],
     "responses": {
@@ -3970,7 +4000,7 @@
       "description": "A malformed ID is 404, like an unknown one."
      },
      {
-      "$ref": "#/components/parameters/Offset"
+      "$ref": "#/components/parameters/Cursor"
      }
     ],
     "responses": {
@@ -4090,7 +4120,7 @@
     ],
     "parameters": [
      {
-      "$ref": "#/components/parameters/Offset"
+      "$ref": "#/components/parameters/Cursor"
      }
     ],
     "responses": {
@@ -4625,10 +4655,103 @@
     }
    }
   },
-  "/donor/staff/exports/{file}": {
+  "/donor/staff/exports/jobs": {
    "get": {
-    "operationId": "export",
-    "summary": "Download a dataset as CSV",
+    "operationId": "exportJobs",
+    "summary": "The staff member's recent exports",
+    "description": "Exports not yet expired, newest first.",
+    "tags": [
+     "Exports"
+    ],
+    "security": [
+     {
+      "staffCookieAuth": []
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ExportJobs"
+        }
+       }
+      }
+     },
+     "401": {
+      "$ref": "#/components/responses/Unauthorized"
+     },
+     "403": {
+      "$ref": "#/components/responses/Forbidden"
+     },
+     "503": {
+      "$ref": "#/components/responses/Unavailable"
+     }
+    }
+   },
+   "post": {
+    "operationId": "requestExport",
+    "summary": "Queue an export",
+    "description": "Builds the dataset in the background, so large datasets finish instead of aborting mid-download. Asking again for a dataset still being built answers with that job. At most three exports can be in progress per staff member.",
+    "tags": [
+     "Exports"
+    ],
+    "security": [
+     {
+      "staffCookieAuth": []
+     }
+    ],
+    "x-rate-limit": "staff",
+    "x-clients": [
+     "browser"
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ExportRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ExportJob"
+        }
+       }
+      }
+     },
+     "401": {
+      "$ref": "#/components/responses/Unauthorized"
+     },
+     "403": {
+      "$ref": "#/components/responses/Forbidden"
+     },
+     "409": {
+      "$ref": "#/components/responses/Conflict"
+     },
+     "422": {
+      "$ref": "#/components/responses/Unprocessable"
+     },
+     "429": {
+      "$ref": "#/components/responses/TooManyRequests"
+     },
+     "503": {
+      "$ref": "#/components/responses/Unavailable"
+     }
+    }
+   }
+  },
+  "/donor/staff/exports/jobs/{job_id}": {
+   "get": {
+    "operationId": "exportJob",
+    "summary": "An export's progress",
     "tags": [
      "Exports"
     ],
@@ -4639,19 +4762,70 @@
     ],
     "parameters": [
      {
-      "name": "file",
+      "name": "job_id",
       "in": "path",
       "required": true,
       "schema": {
        "type": "string",
-       "pattern": "^[a-z-]+\\.csv$"
+       "format": "uuid"
       },
-      "description": "A dataset name from GET /donor/staff/exports, plus `.csv`."
+      "description": "A malformed ID is 404, like an unknown one or one that belongs to another staff member."
      }
     ],
     "responses": {
      "200": {
-      "description": "Streamed CSV attachment. A failure after the first row aborts the connection rather than returning a truncated file.",
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ExportJob"
+        }
+       }
+      }
+     },
+     "401": {
+      "$ref": "#/components/responses/Unauthorized"
+     },
+     "403": {
+      "$ref": "#/components/responses/Forbidden"
+     },
+     "404": {
+      "$ref": "#/components/responses/NotFound"
+     },
+     "503": {
+      "$ref": "#/components/responses/Unavailable"
+     }
+    }
+   }
+  },
+  "/donor/staff/exports/jobs/{job_id}/file": {
+   "get": {
+    "operationId": "downloadExport",
+    "summary": "Download a finished export as CSV",
+    "description": "Only the staff member who requested the export may download it, and only while their role permits the dataset and before it expires (24 hours after it finishes). Each download is audited.",
+    "tags": [
+     "Exports"
+    ],
+    "security": [
+     {
+      "staffCookieAuth": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "job_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid"
+      },
+      "description": "A malformed ID is 404, like an unknown one or one that belongs to another staff member."
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "CSV attachment, streamed from the stored file. A failure after the first byte aborts the connection rather than returning a truncated file.",
       "content": {
        "text/csv": {
         "schema": {
@@ -4668,6 +4842,9 @@
      },
      "404": {
       "$ref": "#/components/responses/NotFound"
+     },
+     "409": {
+      "$ref": "#/components/responses/Conflict"
      },
      "503": {
       "$ref": "#/components/responses/Unavailable"
@@ -6446,6 +6623,9 @@
        "type": "string",
        "format": "uuid"
       }
+     },
+     {
+      "$ref": "#/components/parameters/Offset"
      }
     ],
     "responses": {
@@ -8250,12 +8430,49 @@
       "$ref": "#/components/responses/Forbidden"
      },
      "429": {
-      "$ref": "#/components/responses/RateLimitedByIngress"
+      "description": "The daily new-artifact limit or ingress request limit was reached. PARTNER_REPORT_DAILY_LIMIT identifies the daily quota; Retry-After is seconds until the next UTC day.",
+      "headers": {
+       "Retry-After": {
+        "schema": {
+         "type": "integer",
+         "minimum": 1
+        },
+        "description": "Seconds before retrying."
+       }
+      },
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Problem"
+        }
+       }
+      }
      },
      "503": {
       "$ref": "#/components/responses/Unavailable"
+     },
+     "409": {
+      "description": "Report storage is full; existing artifacts remain available. Code PARTNER_REPORT_STORAGE_LIMIT.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Problem"
+        }
+       }
+      }
+     },
+     "413": {
+      "description": "Report exceeds 1,000 spend categories or the 2 MiB PDF limit. Code PARTNER_REPORT_TOO_LARGE. Existing reports remain available.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Problem"
+        }
+       }
+      }
      }
-    }
+    },
+    "description": "Admin-only. Reuses the immutable PDF for the same organization snapshot and UTC day. New artifacts are limited to 20 per UTC day and 1,000 retained reports or 128 MiB per organization. Existing reports remain downloadable after a limit is reached."
    }
   },
   "/donor/partner/company-code.svg": {
@@ -8539,10 +8756,18 @@
             ],
             "additionalProperties": false
            }
+          },
+          "next_cursor": {
+           "type": [
+            "string",
+            "null"
+           ],
+           "description": "Cursor of the next page, or null on the last page."
           }
          },
          "required": [
-          "applications"
+          "applications",
+          "next_cursor"
          ],
          "additionalProperties": false
         }
@@ -8555,10 +8780,18 @@
      "403": {
       "$ref": "#/components/responses/Forbidden"
      },
+     "422": {
+      "$ref": "#/components/responses/Unprocessable"
+     },
      "503": {
       "$ref": "#/components/responses/Unavailable"
      }
-    }
+    },
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/Cursor"
+     }
+    ]
    }
   },
   "/donor/staff/partners/{appID}/approve": {
@@ -9205,6 +9438,10 @@
           },
           "suppressed": {
            "type": "boolean"
+          },
+          "streak_verified": {
+           "type": "boolean",
+           "description": "The average streak is current for every linked employee. Hide the average streak while false; other totals come from recorded facts."
           }
          },
          "required": [
@@ -9215,7 +9452,8 @@
           "avg_streak_days",
           "volunteer_minutes",
           "teams",
-          "suppressed"
+          "suppressed",
+          "streak_verified"
          ],
          "additionalProperties": false
         }
@@ -11465,7 +11703,7 @@
    "post": {
     "operationId": "postDonorStaffContentRules",
     "summary": "/donor/staff/content/rules",
-    "description": "Replaces the words only; how badges and milestones are earned does not change. An empty title and text restore the default.",
+    "description": "Replaces badge earning thresholds, minimum ranking populations, PNG/JPEG artwork, and the milestone ladder. Every catalog badge must be supplied. The JSON body may be up to 10 MiB to hold the complete artwork batch. Wording changes use /donor/staff/content/wording.",
     "tags": [
      "Content"
     ],
@@ -11523,6 +11761,12 @@
      },
      "503": {
       "$ref": "#/components/responses/Unavailable"
+     },
+     "413": {
+      "$ref": "#/components/responses/PayloadTooLarge"
+     },
+     "415": {
+      "$ref": "#/components/responses/UnsupportedMediaType"
      }
     }
    }
@@ -11531,7 +11775,7 @@
    "post": {
     "operationId": "postDonorSignup",
     "summary": "/donor/signup",
-    "description": "Starts account creation by emailing a verification link; no session is issued here. Answers 200 `{\"sent\":true}` whether or not the address already has an account, so it never reveals which. 503 `EMAIL_UNCONFIGURED` when the deployment has no email. The link (`/account/claim#token=\u2026`) is single-use and expires after 15 minutes; the app should handle it as a universal/app link and call POST /donor/claim, which takes the optional `device_name` and `platform` that label the resulting session.",
+    "description": "Starts account creation by emailing a verification link; no session is issued here. Answers 200 `{\"sent\":true}` whether or not the address already has an account, so it never reveals which. 503 `EMAIL_UNCONFIGURED` when the deployment has no email. The link (`/account/claim#token=\u2026`) is single-use and expires after 15 minutes; the app should handle it as a universal/app link and call POST /donor/claim, which takes the optional `device_name` and `platform` that label the resulting session. The response does not reveal whether an email belongs to a disabled donor, staff or partner; unavailable identities receive the same sent:true response without creating a donor account.",
     "tags": [
      "Account"
     ],
@@ -11950,7 +12194,7 @@
     "description": "Opaque position from the previous page's `next_cursor`; omit for the first page. Keyset-paged lists hold up to 50 rows.",
     "schema": {
      "type": "string",
-     "maxLength": 200
+     "maxLength": 600
     }
    },
    "FailedPaymentState": {
@@ -12128,7 +12372,7 @@
      },
      "code": {
       "type": "string",
-      "description": "Present on a 503 for a feature this deployment has deliberately not configured (not transient: do not retry; show the feature as unavailable), and on the 422 of POST /donor/me/password when `current_password` is missing or wrong.",
+      "description": "Present on a 503 for a feature this deployment has deliberately not configured (not transient: do not retry; show the feature as unavailable), and on the 422 of POST /donor/me/password when `current_password` is missing or wrong. Report export refusals use PARTNER_REPORT_DAILY_LIMIT (429, retry at the next UTC day) PARTNER_REPORT_STORAGE_LIMIT (409), or PARTNER_REPORT_TOO_LARGE (413). Existing reports remain available.",
       "enum": [
        "PAYMENTS_UNCONFIGURED",
        "EMAIL_UNCONFIGURED",
@@ -12136,7 +12380,10 @@
        "PUSH_UNCONFIGURED",
        "FOUNDING_CLAIMS_UNCONFIGURED",
        "PASSKEYS_UNCONFIGURED",
-       "CURRENT_PASSWORD_INCORRECT"
+       "CURRENT_PASSWORD_INCORRECT",
+       "PARTNER_REPORT_DAILY_LIMIT",
+       "PARTNER_REPORT_STORAGE_LIMIT",
+       "PARTNER_REPORT_TOO_LARGE"
       ]
      },
      "errors": {
@@ -12518,6 +12765,11 @@
      "push_gift_processed": {
       "type": "boolean",
       "description": "App notification when a verified gift is processed. Starts on."
+     },
+     "timezone_override": {
+      "type": "string",
+      "maxLength": 64,
+      "description": "The saved manual IANA zone correction. Omitted while using the ZIP suggestion."
      }
     },
     "required": [
@@ -13476,19 +13728,17 @@
        "$ref": "#/components/schemas/DonorSummary"
       }
      },
-     "next_offset": {
+     "next_cursor": {
       "type": [
-       "integer",
+       "string",
        "null"
       ],
-      "format": "int64",
-      "description": "Offset of the next page, or null on the last page.",
-      "minimum": 0
+      "description": "Cursor of the next page, or null on the last page."
      }
     },
     "required": [
      "donors",
-     "next_offset"
+     "next_cursor"
     ],
     "additionalProperties": false
    },
@@ -13780,19 +14030,17 @@
        "$ref": "#/components/schemas/AuditEvent"
       }
      },
-     "next_offset": {
+     "next_cursor": {
       "type": [
-       "integer",
+       "string",
        "null"
       ],
-      "format": "int64",
-      "description": "Offset of the next page, or null on the last page.",
-      "minimum": 0
+      "description": "Cursor of the next page, or null on the last page."
      }
     },
     "required": [
      "events",
-     "next_offset"
+     "next_cursor"
     ],
     "additionalProperties": false
    },
@@ -13832,6 +14080,10 @@
      "available_at": {
       "type": "string",
       "format": "date-time"
+     },
+     "created_at": {
+      "type": "string",
+      "format": "date-time"
      }
     },
     "required": [
@@ -13841,7 +14093,8 @@
      "completed_at",
      "last_error",
      "suppressed_reason",
-     "available_at"
+     "available_at",
+     "created_at"
     ],
     "additionalProperties": false
    },
@@ -13854,19 +14107,17 @@
        "$ref": "#/components/schemas/StaffMessage"
       }
      },
-     "next_offset": {
+     "next_cursor": {
       "type": [
-       "integer",
+       "string",
        "null"
       ],
-      "format": "int64",
-      "description": "Offset of the next page, or null on the last page.",
-      "minimum": 0
+      "description": "Cursor of the next page, or null on the last page."
      }
     },
     "required": [
      "messages",
-     "next_offset"
+     "next_cursor"
     ],
     "additionalProperties": false
    },
@@ -13919,6 +14170,10 @@
        "null"
       ],
       "format": "date-time"
+     },
+     "created_at": {
+      "type": "string",
+      "format": "date-time"
      }
     },
     "required": [
@@ -13930,7 +14185,8 @@
      "period_end",
      "reason",
      "status",
-     "completed_at"
+     "completed_at",
+     "created_at"
     ],
     "additionalProperties": false
    },
@@ -13943,19 +14199,17 @@
        "$ref": "#/components/schemas/StaffAction"
       }
      },
-     "next_offset": {
+     "next_cursor": {
       "type": [
-       "integer",
+       "string",
        "null"
       ],
-      "format": "int64",
-      "description": "Offset of the next page, or null on the last page.",
-      "minimum": 0
+      "description": "Cursor of the next page, or null on the last page."
      }
     },
     "required": [
      "actions",
-     "next_offset"
+     "next_cursor"
     ],
     "additionalProperties": false
    },
@@ -14134,6 +14388,94 @@
     },
     "required": [
      "datasets"
+    ],
+    "additionalProperties": false
+   },
+   "ExportRequest": {
+    "type": "object",
+    "properties": {
+     "dataset": {
+      "type": "string",
+      "pattern": "^[a-z-]+$",
+      "description": "A name from GET /donor/staff/exports."
+     }
+    },
+    "required": [
+     "dataset"
+    ],
+    "additionalProperties": false
+   },
+   "ExportJob": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string",
+      "format": "uuid"
+     },
+     "dataset": {
+      "type": "string",
+      "pattern": "^[a-z-]+$"
+     },
+     "state": {
+      "type": "string",
+      "enum": [
+       "queued",
+       "running",
+       "complete",
+       "failed"
+      ]
+     },
+     "failure": {
+      "type": "string",
+      "enum": [
+       "too_large",
+       "forbidden",
+       "error"
+      ],
+      "description": "Present when the export failed: it exceeded the 50 MB stored-size cap, its requester lost access, or it kept erroring."
+     },
+     "requested_at": {
+      "type": "string",
+      "format": "date-time"
+     },
+     "completed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Present once the export finished or failed."
+     },
+     "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the file is purged."
+     },
+     "row_count": {
+      "type": "integer",
+      "format": "int64",
+      "description": "Rows written so far."
+     }
+    },
+    "required": [
+     "id",
+     "dataset",
+     "state",
+     "requested_at",
+     "expires_at",
+     "row_count"
+    ],
+    "additionalProperties": false
+   },
+   "ExportJobs": {
+    "type": "object",
+    "properties": {
+     "jobs": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/ExportJob"
+      }
+     }
+    },
+    "required": [
+     "jobs"
     ],
     "additionalProperties": false
    },
@@ -14751,7 +15093,7 @@
     "properties": {
      "name": {
       "type": "string",
-      "description": "First name + last initial, as the invitee chose to display it."
+      "description": "First name and last initial from the invitee's full name, or their public first name when no full name is on record."
      },
      "active": {
       "type": "boolean",
@@ -15398,6 +15740,10 @@
      "volunteer_minutes": {
       "type": "integer",
       "format": "int64"
+     },
+     "metrics_verified": {
+      "type": "boolean",
+      "description": "Giving and streak fields are current under the active recognition rules for every member. Hide those fields and rankings while false; volunteer minutes are independent."
      }
     },
     "required": [
@@ -15406,7 +15752,8 @@
      "active_givers",
      "annualized_minor",
      "avg_streak_days",
-     "volunteer_minutes"
+     "volunteer_minutes",
+     "metrics_verified"
     ],
     "additionalProperties": false
    },
@@ -16222,6 +16569,14 @@
       "items": {
        "$ref": "#/components/schemas/EventAttendee"
       }
+     },
+     "next_offset": {
+      "type": [
+       "integer",
+       "null"
+      ],
+      "format": "int64",
+      "description": "Next roster page offset, or null on the last page. Totals describe the whole event."
      }
     },
     "additionalProperties": false,
@@ -16247,7 +16602,8 @@
      "reserved",
      "waitlisted",
      "checked_in",
-     "attendees"
+     "attendees",
+     "next_offset"
     ]
    },
    "ImpactSummary": {
