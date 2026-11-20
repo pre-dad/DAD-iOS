@@ -31,11 +31,11 @@ with `-skipPackagePluginValidation`; compilation and tests remain enabled. Xcode
 AppIntents metadata-extraction diagnostic is not suppressed; this app defines no intents.
 
 Swift 6 compilation supplies type and concurrency checking; there is no separate Swift lint tool.
-Additional local checks:
+`scripts/check-ios.sh` also runs `plutil -lint` over the project file, Info.plist, entitlements, and privacy
+manifest. The thread-sanitizer run is local-only: it rebuilds the package with instrumentation, and CI's job is
+already close to its time limit. Additional local checks:
 
 ```sh
-plutil -lint DAD.xcodeproj/project.pbxproj App/Info.plist App/DAD.entitlements App/PrivacyInfo.xcprivacy
-bash -n scripts/check-ios.sh
 swift test --scratch-path /tmp/dad-ios-thread --force-resolved-versions --sanitize=thread
 gitleaks git --redact --no-banner --config .gitleaks.toml
 node --test scripts/check-secrets-config.test.mjs

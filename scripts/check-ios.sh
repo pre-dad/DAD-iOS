@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
+plutil -lint DAD.xcodeproj/project.pbxproj App/Info.plist App/DAD.entitlements App/PrivacyInfo.xcprivacy
 node scripts/check-foundation.mjs
 node --test scripts/check-foundation.test.mjs scripts/check-foundation-drift.test.mjs
 if command -v gitleaks >/dev/null; then
