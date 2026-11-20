@@ -41,6 +41,17 @@ func profileJSON(version: Int = 3) -> String {
     #"{"email":"alex@example.org","public_name":"Alex","account_role":"DONOR","zip":"78701","city":"Austin","timezone":null,"phone":null,"referral_emails":true,"marketing_emails":false,"push_referral_converted":true,"push_streak_at_risk":true,"push_streak_milestone":true,"push_streak_lapsed":true,"push_badge_earned":true,"push_gift_processed":true,"push_event_nearby":false,"push_event_reminder":true,"push_event_promoted":false,"rankings_opted_out":false,"network_visible":true,"volunteer":true,"volunteer_interests":[],"version":\#(version),"consent_version":"v1"}"#
 }
 
+/// Polls until `condition` holds; fails the test instead of hanging when it never does.
+@MainActor
+func waitUntil(timeout: Duration = .seconds(5), file: StaticString = #filePath, line: UInt = #line,
+               _ condition: @MainActor () -> Bool) async {
+    let deadline = ContinuousClock.now + timeout
+    while !condition() {
+        if ContinuousClock.now >= deadline { XCTFail("condition not met within \(timeout)", file: file, line: line); return }
+        await Task.yield()
+    }
+}
+
 /// Latch the test opens to release a gated transport/call; also signals when the call arrived.
 actor Gate {
     private var open = false
