@@ -2,7 +2,7 @@ import Foundation
 
 // Events view models + the service seam. The models own explicit load/ready/failed state and
 // the reserve/cancel/check-in transitions, so they are unit-tested without a network, a camera,
-// or UI — the same shape as the giving and engagement models.
+// or UI.
 
 /// The seam the events models call. A conformer maps to the generated client (WireEvents) or a
 /// preview/test double; all value types so the models stay testable. The server is

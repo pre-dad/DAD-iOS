@@ -2,7 +2,7 @@ import Foundation
 
 // Donor engagement surface (PRD A-*, I-*, R-*, N-*, B-*, K-*). Pure value types and the
 // display/eligibility rules live here so badge state, rankings opt-out, impact formatting
-// and QR payloads are unit-testable without a network, a camera, or UI.
+// and QR payloads are unit-testable.
 
 // MARK: - Badges (B-1..B-4)
 

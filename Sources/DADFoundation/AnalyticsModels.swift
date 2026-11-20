@@ -2,7 +2,7 @@ import Foundation
 
 // The analytics sink seam + the buffering recorder. A conformer maps a batch to the generated
 // ingest client (WireAPI) or a test double; the recorder owns buffering, idempotent de-dup, and
-// chunked flush so the "emit the taxonomy once, deliver reliably" behaviour is unit-testable.
+// chunked flush.
 
 /// The seam the recorder flushes through. A conformer POSTs the batch to /analytics/events.
 public protocol AnalyticsSink: Sendable {

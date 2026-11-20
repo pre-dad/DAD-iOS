@@ -3,7 +3,7 @@ import Foundation
 // Analytics instrumentation (PRD §9). A single typed event sink maps the §9 taxonomy to the
 // shared ingest schema (POST /analytics/events). The taxonomy, the per-event typed-property
 // rules, and the batch envelope live here as pure values so emission is unit-testable without a
-// network — the same "pure core, seam for I/O" shape as the other phases.
+// network.
 
 // MARK: - Event taxonomy (§9)
 
