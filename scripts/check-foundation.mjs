@@ -3,13 +3,14 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+export const SOURCE_REPOSITORY = "pre-dad/DAD-Main";
 const hash = (contents) => createHash("sha256").update(contents).digest("hex");
 const files = ["DADNullValue.swift", "DADTokens.kt", "DADTokens.swift", "links.json", "mobile.openapi.json", "openapi.json", "swift.openapi.json", "tokens.json", "tokens.ts"];
 
 export async function verifyFoundation(root) {
   const lock = JSON.parse(await readFile(resolve(root, "foundation.lock.json"), "utf8"));
   if (!/^\d+\.\d+\.\d+$/.test(lock.version) || lock.release_tag !== `mobile-foundation-v${lock.version}` ||
-      lock.source_repository !== "pre-dad/DAD-Main" || !/^[a-f0-9]{40}$/.test(lock.source_revision)) throw new Error("Invalid foundation lock");
+      lock.source_repository !== SOURCE_REPOSITORY || !/^[a-f0-9]{40}$/.test(lock.source_revision)) throw new Error("Invalid foundation lock");
   const directory = resolve(root, "contracts/foundation");
   const raw = await readFile(resolve(directory, "manifest.json"));
   if (hash(raw) !== lock.manifest_sha256) throw new Error("Foundation manifest differs from the pinned release");

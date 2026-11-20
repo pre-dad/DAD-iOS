@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
+import { SOURCE_REPOSITORY as SOURCE } from "./check-foundation.mjs";
 
 // Advisory drift check: compares the vendored mobile-foundation version (foundation.lock.json)
 // against the newest `mobile-foundation-vX.Y.Z` tag published by DAD-Main, and reports how far
@@ -16,7 +17,6 @@ import { promisify } from "node:util";
 //   - behind by a MAJOR                   -> FAIL, exit 1 (a breaking contract change is unadopted)
 //   - remote tags unreachable / no tags   -> WARN, exit 0 (advisory; a network blip must not break CI)
 
-const SOURCE = "pre-dad/DAD-Main";
 const run = promisify(execFile);
 
 const parse = (v) => {
@@ -28,6 +28,16 @@ const parse = (v) => {
 const cmp = (a, b) =>
   a.major - b.major || a.minor - b.minor || a.patch - b.patch;
 
+// Newest mobile-foundation-vX.Y.Z version ({ major, minor, patch }) in `git ls-remote --tags` output, or null.
+export function newestVersion(lsRemoteOutput) {
+  const versions = lsRemoteOutput
+    .split("\n")
+    .map((line) => /refs\/tags\/mobile-foundation-v(\d+\.\d+\.\d+)$/.exec(line.trim()))
+    .filter(Boolean)
+    .map((m) => parse(m[1]));
+  return versions.length === 0 ? null : versions.reduce((best, v) => (cmp(v, best) > 0 ? v : best));
+}
+
 // Returns the newest mobile-foundation-vX.Y.Z version string from the public remote, or null when
 // the remote is unreachable or exposes no such tag. No auth token required (public repo).
 export async function latestPublishedVersion(sourceRepository = SOURCE) {
@@ -37,19 +47,11 @@ export async function latestPublishedVersion(sourceRepository = SOURCE) {
       "ls-remote", "--tags", "--refs",
       `https://github.com/${sourceRepository}`,
       "mobile-foundation-v*",
-    ], { timeout: 15000 }));
+    ], { timeout: 15000, env: { ...process.env, GIT_TERMINAL_PROMPT: "0" } }));
   } catch {
     return null; // unreachable — treat as advisory-unavailable, never a hard failure
   }
-  const versions = stdout
-    .split("\n")
-    .map((line) => /refs\/tags\/mobile-foundation-v(\d+\.\d+\.\d+)$/.exec(line.trim()))
-    .filter(Boolean)
-    .map((m) => m[1])
-    .map(parse)
-    .filter(Boolean);
-  if (versions.length === 0) return null;
-  return versions.reduce((best, v) => (cmp(v, best) > 0 ? v : best));
+  return newestVersion(stdout);
 }
 
 // Pure decision function (testable without the network): given the pinned version and the latest

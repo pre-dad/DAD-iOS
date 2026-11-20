@@ -3,6 +3,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 node scripts/check-foundation.mjs
 node --test scripts/check-foundation.test.mjs scripts/check-foundation-drift.test.mjs
+if command -v gitleaks >/dev/null; then
+  GITLEAKS_BINARY="$(command -v gitleaks)" node --test scripts/check-secrets-config.test.mjs
+fi
 node scripts/prepare-client.mjs
 swift test --scratch-path "${DAD_SWIFT_BUILD:-/tmp/dad-ios-swift}" --force-resolved-versions
 device="${DAD_SIMULATOR_ID:-$(node scripts/simulator.mjs)}"
