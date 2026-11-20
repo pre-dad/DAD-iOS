@@ -23,7 +23,7 @@ public actor PartnerSession {
         }
     }
 
-    public var isSignedIn: Bool { (try? token()) != nil }
+    public var isSignedIn: Bool { stored.map { $0.expiresAt > now() } ?? false }
 
     func install(token: String) throws {
         let credentials = Credentials(access: token, refresh: "", expiresAt: now().addingTimeInterval(Self.lifetime))
@@ -72,18 +72,6 @@ public actor PartnerSession {
         epoch += 1
         stored = nil
         try store.clear()
-    }
-}
-
-/// Runs one partner call and maps a 4xx/5xx the generated client could not decode (the ingress limiter's 429
-/// has no Problem body) by its status, exactly as a documented response would be. Cancellation is never remapped.
-func mappingUndecodableStatus<T: Sendable>(_ work: () async throws -> T) async throws -> T {
-    do { return try await work() }
-    catch let error as ClientError {
-        if let status = error.response?.status.code, status >= 400, !error.underlyingError.isCancellation {
-            throw AccountError.forStatus(status)
-        }
-        throw error
     }
 }
 
@@ -428,6 +416,7 @@ public struct WirePartner: PartnerService {
             case .ok: return
             case .unauthorized: throw AccountError.signedOut
             case .unprocessableContent: throw AccountError.invalidInput
+            case .tooManyRequests: throw AccountError.rateLimited
             case .undocumented(let status, _): throw AccountError.forStatus(status)
             default: throw AccountError.unavailable
             }
@@ -439,6 +428,7 @@ public struct WirePartner: PartnerService {
             switch try await client.partnerUnregisterPushDevice(.init()) {
             case .ok: return
             case .unauthorized: throw AccountError.signedOut
+            case .tooManyRequests: throw AccountError.rateLimited
             case .undocumented(let status, _): throw AccountError.forStatus(status)
             default: throw AccountError.unavailable
             }

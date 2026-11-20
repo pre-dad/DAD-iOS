@@ -9,7 +9,7 @@ typeOverrides:
     DADLiteralNull: DADNullValue
 filter:
   operations:
-    # --- Session & auth (app shell, Phase A/B) ---
+    # --- Session & auth ---
     - login
     - logout
     - logoutAll
@@ -26,26 +26,23 @@ filter:
     - finishPhoneSignIn
     - beginDonorPasskeySignIn
     - finishDonorPasskeySignIn
-    - beginDonorPasskeyRegister
-    - finishDonorPasskeyRegister
     - donorPasskeys
     - deleteDonorPasskey
-    # --- Profile & account (Phase B/C) ---
+    # --- Profile & account ---
     - profile
     - saveProfile
     - requestEmailChange
-    - confirmEmailChange
     - savePreferences
     - saveSharing
     - sharing
     - deleteAccount
     - registerPushDevice
     - unregisterPushDevice
-    # --- Link attribution (2.10): referral and company-code capture, bound after sign-in ---
+    # --- Link attribution: referral and company-code capture, bound after sign-in ---
     - captureReferral
     - captureCompany
     - bindCompanyTouch
-    # --- Donor giving core (Phase C) ---
+    # --- Donor giving core ---
     - dashboard
     - gifts
     - recurring
@@ -57,37 +54,31 @@ filter:
     - beginPaymentUpdate
     - receipt
     - annualSummary
-    # --- Engagement: streak, network, badges, referral, initiatives (Phase C/D) ---
+    # --- Engagement: streak, network, badges, referral, initiatives ---
     - donorBadges
     - donorNetwork
     - conversions
-    - referralCode
     - todayInitiative
-    - publishedInitiative
-    - publishedInitiatives
     - initiativeSpend
-    # --- Wallet passes (Phase D) ---
+    # --- Wallet passes ---
     - walletProviders
     - applePass
-    - googlePass
-    # --- Events (Phase E) ---
+    # --- Events ---
     - donorEvents
     - donorEventDetail
     - inviteOnlyEvents
     - reserveEvent
     - cancelEvent
     - checkInEvent
-    - eventDetail
-    - eventCalendar
     - donorEventCalendar
-    # --- Employee / matching (Phase D/F) ---
+    # --- Employee / matching ---
     - employeeEnroll
     - employeeJoinTeam
     - employeeTeam
     - employeeTeams
     - employeeOurPeople
     - employeeWorkforce
-    # --- Partner portal (Phase F, P-*/EM-*); partner push is the v2.2 addition ---
+    # --- Partner portal ---
     - partnerRequestSignIn
     - partnerAcceptInvite
     - partnerSignOut
@@ -103,12 +94,9 @@ filter:
     - partnerReport
     - partnerExports
     - partnerRetainedReport
-    - partnerCompanyCode
     - applyWithReceipt
     - applicationStatus
     - partnerRegisterPushDevice
     - partnerUnregisterPushDevice
-    # --- Analytics ingest (Phase G) ---
+    # --- Analytics ingest ---
     - ingestAnalytics
-    # --- Health ---
-    - live

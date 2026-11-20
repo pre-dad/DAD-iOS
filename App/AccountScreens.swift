@@ -78,7 +78,7 @@ struct EmailChangeSection: View {
                 if case .failed(let message) = model.phase { failureText(message, id: "email-change-error") }
                 Button("Send confirmation") { Task { await model.submit() } }
                     .buttonStyle(DADButtonStyle(.primary)).disabled(!model.canSubmit).accessibilityIdentifier("email-change-submit")
-                Button("Cancel") { model.edit(); expanded = false }.buttonStyle(DADButtonStyle(.secondary))
+                Button("Cancel") { model.edit(); expanded = false }.buttonStyle(DADButtonStyle(.secondary)).accessibilityIdentifier("email-change-cancel")
             }
         }
         .accessibilityElement(children: .contain).accessibilityIdentifier("email-change-section")
