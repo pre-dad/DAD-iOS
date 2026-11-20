@@ -100,13 +100,13 @@ final class WirePartnerStatusTests: XCTestCase {
         }
     }
 
-    func testUnknownRoleStatusAndUnitDecodeInsteadOfFailingThePortal() async throws {
+    func testUnknownRoleAndStatusDecodeAndAnUnknownUnitIsHiddenInsteadOfFailingThePortal() async throws {
         let transport = ScriptedTransport { seen, _ in
             switch seen.request.path {
             case "/donor/partner/overview":
                 return (.ok, #"{"user_id":"u9","organization":"Acme","description":"d","role":"OWNER","company_code":"AC","committed_minor":1,"deployed_minor":1,"deployed_percent":1,"people_reached":1,"employees_enrolled":null,"workforce_size":5,"enrolled_percent":null,"updated_at":null,"has_logo":false,"committed_verified":true,"deployed_verified":true,"people_reached_verified":true}"#)
             default:
-                return (.ok, #"{"initiatives":[{"id":"i1","title":"T","summary":"S","status":"PAUSED","region":"R","county_count":1,"committed_minor":1,"deployed_minor":1,"metrics":[{"label":"L","value":3,"unit":"HOURS","verified_on":"2026-10-20"}],"spend":[],"updated_at":"2026-10-28T10:00:00Z"}]}"#)
+                return (.ok, #"{"initiatives":[{"id":"i1","title":"T","summary":"S","status":"PAUSED","region":"R","county_count":1,"committed_minor":1,"deployed_minor":1,"metrics":[{"label":"L","value":3,"unit":"HOURS","verified_on":"2026-10-20"},{"label":"P","value":7,"unit":"PEOPLE","verified_on":"2026-10-20"}],"spend":[],"updated_at":"2026-10-28T10:00:00Z"}]}"#)
             }
         }
         let session = try PartnerSession(store: MemoryStore(nil))
@@ -120,7 +120,7 @@ final class WirePartnerStatusTests: XCTestCase {
         let initiatives = try await wire.initiatives()
         XCTAssertEqual(initiatives.map(\.id), ["i1"])
         XCTAssertEqual(initiatives.first?.status, .active)
-        XCTAssertEqual(initiatives.first?.metrics.first?.value, 3)
+        XCTAssertEqual(initiatives.first?.metrics.map(\.label), ["P"], "a metric in a unit this build does not know is hidden, not shown as a people count")
     }
 
     func testRemoveUserSendsTheIdInThePathAndPartnerPushMapsRejection() async throws {

@@ -3,7 +3,7 @@ import Foundation
 // Partner portal (PRD P-*, EM-*, §7). Pure value types and display rules live here so role
 // gating, the "verified or hidden, never estimated" figure rule (§7.3), <5 suppression (EM-3),
 // and last-updated rendering are unit-testable without a network or UI — the same "pure core,
-// seam for I/O" shape as the donor phases (C/D/E).
+// seam for I/O" shape as the donor models.
 
 // MARK: - Role (§7.2, P-4/P-5)
 
@@ -192,7 +192,8 @@ public struct PartnerMetric: Sendable, Equatable {
         case people = "PEOPLE"
         case initiatives = "INITIATIVES"
         case partners = "PARTNERS"
-        public init(contract raw: String) { self = Unit(rawValue: raw) ?? .people }
+        /// Nil for a unit this build does not know, so the figure is hidden rather than shown as a people count (§7.3).
+        public init?(contract raw: String) { self.init(rawValue: raw) }
     }
     public let label: String
     public let value: Int64

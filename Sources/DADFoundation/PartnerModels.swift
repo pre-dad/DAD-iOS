@@ -2,7 +2,7 @@ import Foundation
 
 // Partner portal view models + the service seam. The models own explicit load/ready/failed state,
 // role-gated actions and push register/unregister, so they are unit-tested without a network or UI —
-// the same shape as the donor models (C/D/E).
+// the same shape as the donor models.
 
 public enum PartnerReportLimit: Error, Sendable, Equatable {
     case daily, storage, tooLarge
