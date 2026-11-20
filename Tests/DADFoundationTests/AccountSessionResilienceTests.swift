@@ -33,6 +33,14 @@ private final class ScriptedAccountAPI: AccountAPI, @unchecked Sendable {
 
 private struct SaveFails: Error {}
 
+private final class ClearFailingStore: CredentialStore, @unchecked Sendable {
+    private let value: Credentials
+    init(_ value: Credentials) { self.value = value }
+    func load() throws -> Credentials? { value }
+    func save(_ credentials: Credentials) throws {}
+    func clear() throws { throw AccountError.secureStorage(-25308) }
+}
+
 private final class SaveFailingStore: CredentialStore, @unchecked Sendable {
     private let lock = NSLock()
     private var value: Credentials?
@@ -157,6 +165,15 @@ final class AccountSessionResilienceTests: XCTestCase {
         XCTAssertEqual(api.loggedOut, ["live"])
         let signedIn = await session.isSignedIn
         XCTAssertFalse(signedIn)
+    }
+
+    func testLogoutSurfacesAStoreFailureAndStillEndsTheInMemorySession() async throws {
+        let api = ScriptedAccountAPI(refresh: [.success(fresh())])
+        let session = try AccountSession(api: api, store: ClearFailingStore(Credentials(access: "live", refresh: "r", expiresAt: .distantFuture)))
+        do { try await session.logout(); XCTFail("a failed keychain clear must be visible to the caller") }
+        catch { XCTAssertEqual(error as? AccountError, .secureStorage(-25308)) }
+        let signedIn = await session.isSignedIn
+        XCTAssertFalse(signedIn, "no call may be authorized after logout, whatever the keychain did")
     }
 
     func testAnAccessTokenRequestFromACancelledCallerThrowsCancellation() async throws {

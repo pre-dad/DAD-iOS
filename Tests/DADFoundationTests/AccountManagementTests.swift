@@ -306,6 +306,19 @@ final class WireAccountManagementTests: XCTestCase {
         XCTAssertEqual(transport.calls(to: "/donor/logout-all").count, 1)
     }
 
+    func testSignOutEverywhereWith401EndsTheSessionAndWith429KeepsIt() async throws {
+        let expired = try make(ScriptedTransport { _, _ in (.unauthorized, "{}") })
+        try await expired.0.signOutEverywhere()
+        XCTAssertNil(try expired.2.load(), "the server already ended this session, so the device is signed out")
+
+        for body in ["", "{}"] {
+            let limited = try make(ScriptedTransport { _, _ in (.tooManyRequests, body) })
+            do { try await limited.0.signOutEverywhere(); XCTFail("429 must surface") }
+            catch { XCTAssertEqual(error as? AccountError, .rateLimited) }
+            XCTAssertNotNil(try limited.2.load(), "a rate-limited request must not pretend every device was signed out")
+        }
+    }
+
     func testEmployerMapsAnUnlinkedDonorToNoOrganization() async throws {
         let unlinked = try make(ScriptedTransport { _, _ in (.ok, #"{"partner_id":"","organization":"","leaderboard":[]}"#) })
         let none = try await unlinked.0.employer()
