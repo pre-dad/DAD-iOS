@@ -55,3 +55,6 @@ these; this file only adds what they do not say.
   AccountError.invalidConfiguration`) so a release build with an unconfigured origin never
   serves synthetic data as real. Keep that guard on any new session fallback.
 - **Never track working documents.** Plans/findings/notes go in git-ignored `docs/`.
+- **Models built inline in a parent `body` are intentional.** A child's `@State var model` keeps only
+  the first instance; later constructions are discarded. That is cheap only while model inits stay
+  free of side effects (no I/O, no `Task`), so start work in `.task`, never in `init`.
