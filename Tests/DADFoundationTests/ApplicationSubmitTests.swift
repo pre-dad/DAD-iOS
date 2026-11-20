@@ -12,7 +12,11 @@ private final class HeaderTransport: ClientTransport, @unchecked Sendable {
     private let lock = NSLock()
     private var log: [Seen] = []
     private let reply: @Sendable (Int) throws -> (HTTPResponse.Status, HTTPFields, String?)
-    var onSend: @Sendable () -> Void = {}
+    private var sendHook: @Sendable () -> Void = {}
+    var onSend: @Sendable () -> Void {
+        get { lock.withLock { sendHook } }
+        set { lock.withLock { sendHook = newValue } }
+    }
     init(_ reply: @escaping @Sendable (Int) throws -> (HTTPResponse.Status, HTTPFields, String?)) { self.reply = reply }
     var seen: [Seen] { lock.withLock { log } }
 
@@ -134,14 +138,6 @@ final class WirePartnerApplicationTests: XCTestCase {
         do { try await throttled.applicationSubmit.submit(.make(sample)); XCTFail("expected the call to throw") }
         catch let error as ApplicationSubmitError { XCTAssertEqual(error, .rateLimited(retryAfter: 30)) }
     }
-}
-
-final class LockedBox<Value: Sendable>: @unchecked Sendable {
-    private let lock = NSLock()
-    private var value: Value
-    init(_ value: Value) { self.value = value }
-    func set(_ new: Value) { lock.withLock { value = new } }
-    func get() -> Value { lock.withLock { value } }
 }
 
 @MainActor

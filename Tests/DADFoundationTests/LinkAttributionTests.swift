@@ -3,16 +3,6 @@ import HTTPTypes
 import XCTest
 @testable import DADFoundation
 
-final class KeptReferral: @unchecked Sendable {
-    private let lock = NSLock()
-    private var token: String?
-    init(_ token: String?) { self.token = token }
-    var value: String? {
-        get { lock.withLock { token } }
-        set { lock.withLock { token = newValue } }
-    }
-}
-
 private final class MemoryLinkTokens: LinkTokenStore, @unchecked Sendable {
     private let lock = NSLock()
     private var tokens: LinkTokens

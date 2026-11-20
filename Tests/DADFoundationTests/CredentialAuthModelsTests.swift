@@ -1,4 +1,5 @@
 import Foundation
+import HTTPTypes
 import XCTest
 @testable import DADFoundation
 
@@ -485,9 +486,9 @@ private let modelOptionsJSON = #"{"ceremony":"\#(String(repeating: "c", count: 4
     }
 
     func testServerRejectionAndOutageMessages() async {
-        for (status, fragment) in [(HTTPStatusBox(401), "didn’t work"), (HTTPStatusBox(429), "Too many"), (HTTPStatusBox(503), "isn’t available right now")] {
+        for (status, fragment) in [(HTTPResponse.Status.unauthorized, "didn’t work"), (.tooManyRequests, "Too many"), (.serviceUnavailable, "isn’t available right now")] {
             let transport = ScriptedTransport { seen, _ in
-                (seen.request.path ?? "").hasSuffix("/options") ? (.ok, modelOptionsJSON) : (status.status, "{}")
+                (seen.request.path ?? "").hasSuffix("/options") ? (.ok, modelOptionsJSON) : (status, "{}")
             }
             let model = PasskeySignInModel(authenticator: FakeAuthenticator(result: .success(assertion)),
                                            service: WireCredentialAuth(origin: testOrigin, transport: transport), establish: establishDirectly)
@@ -504,12 +505,4 @@ private let modelOptionsJSON = #"{"ceremony":"\#(String(repeating: "c", count: 4
         await model.start()
         XCTAssertEqual(model.phase, .failed("Passkeys aren’t available on this device."))
     }
-}
-
-import HTTPTypes
-
-private struct HTTPStatusBox {
-    let status: HTTPResponse.Status
-    var code: Int { status.code }
-    init(_ code: Int) { status = HTTPResponse.Status(code: code) }
 }

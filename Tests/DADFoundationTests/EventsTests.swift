@@ -2,7 +2,6 @@ import Foundation
 import XCTest
 @testable import DADFoundation
 
-// Deterministic clock helpers.
 private func date(_ iso: String) -> Date {
     let f = ISO8601DateFormatter()
     return f.date(from: iso)!
@@ -54,7 +53,6 @@ final class EventAvailabilityTests: XCTestCase {
     func testNotYetOpenBeforeBookingWindow() {
         let opens = date("2026-11-20T09:00:00Z")
         XCTAssertEqual(makeEvent(bookingOpensAt: opens).availability(now: now), .notYetOpen(opensAt: opens))
-        // Once the window opens, it becomes reservable.
         XCTAssertEqual(makeEvent(bookingOpensAt: opens).availability(now: date("2026-11-20T10:00:00Z")), .reservable(spotsLeft: 5))
     }
 

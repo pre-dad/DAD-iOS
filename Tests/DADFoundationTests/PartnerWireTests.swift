@@ -2,7 +2,7 @@ import XCTest
 import HTTPTypes
 @testable import DADFoundation
 
-/// P6 — the partner portal on the wire. Every operation maps every status the same way (401 ends the
+/// The partner portal on the wire. Every operation maps every status the same way (401 ends the
 /// partner session, 403 role, 404, 409, 422, 429 with or without the Problem body), unknown enum values are
 /// tolerated, the application receipt and the partner/donor sessions live apart, and cancellation keeps state.
 final class WirePartnerStatusTests: XCTestCase {
@@ -35,7 +35,7 @@ final class WirePartnerStatusTests: XCTestCase {
             let session = try PartnerSession(store: store)
             try await session.install(token: "PB")
             let wire = WirePartner(origin: testOrigin, transport: transport, session: session)
-            do { _ = try await wire.report(); XCTFail() }
+            do { _ = try await wire.report(); XCTFail("report must throw") }
             catch { XCTAssertEqual(error as? PartnerReportLimit, expected) }
             XCTAssertNotNil(try store.load())
         }
@@ -92,9 +92,9 @@ final class WirePartnerStatusTests: XCTestCase {
             for body in ["{}", ""] {
                 let transport = ScriptedTransport { _, _ in (status, body) }
                 let auth = WirePartnerAuth(origin: testOrigin, transport: transport, session: try PartnerSession(store: MemoryStore(nil)))
-                do { try await auth.requestSignInLink(email: "a@x.com"); XCTFail() }
+                do { try await auth.requestSignInLink(email: "a@x.com"); XCTFail("requestSignInLink must throw") }
                 catch let thrown { XCTAssertEqual(thrown as? AccountError, error) }
-                do { try await auth.accept(token: "t"); XCTFail() }
+                do { try await auth.accept(token: "t"); XCTFail("accept must throw") }
                 catch let thrown { XCTAssertEqual(thrown as? AccountError, error) }
             }
         }
@@ -132,7 +132,7 @@ final class WirePartnerStatusTests: XCTestCase {
         let wire = WirePartner(origin: testOrigin, transport: transport, session: session)
         try await wire.removeUser(id: "abc")
         XCTAssertEqual(transport.calls(to: "/donor/partner/users/abc/remove").first?.request.method, .post)
-        do { try await wire.registerPushDevice(token: "T", environment: .sandbox); XCTFail() }
+        do { try await wire.registerPushDevice(token: "T", environment: .sandbox); XCTFail("registerPushDevice must throw") }
         catch { XCTAssertEqual(error as? AccountError, .invalidInput) }
     }
 
@@ -194,7 +194,7 @@ final class WireApplicationStatusTests: XCTestCase {
                                                                                     (.serviceUnavailable, "{}", .unavailable)] {
             let store = receiptStore()
             let wire = WireApplicationStatus(origin: testOrigin, transport: ScriptedTransport { _, _ in (status, body) }, receipt: store)
-            do { _ = try await wire.status(); XCTFail() }
+            do { _ = try await wire.status(); XCTFail("status must throw") }
             catch let thrown { XCTAssertEqual(thrown as? AccountError, error) }
             XCTAssertNotNil(try store.load())
         }
@@ -287,7 +287,7 @@ final class PartnerDonorSessionSeparationTests: XCTestCase {
 }
 
 @MainActor
-final class PartnerModelP6Tests: XCTestCase {
+final class PartnerPortalModelTests: XCTestCase {
     private actor Service: PartnerService {
         var role: PartnerRole = .admin
         var users = [PartnerUser(id: "u1", email: "a@x.com", name: "Ada", role: .admin),
@@ -387,10 +387,10 @@ final class PartnerModelP6Tests: XCTestCase {
     }
 }
 
-/// The scripted backend the P6 UITests run on behaves like the server: a viewer's writes are 403, the
+/// The scripted backend the partner UITests run on behaves like the server: a viewer's writes are 403, the
 /// signed-in user and the last admin cannot be removed (409), and an application receipt is recognized.
 @MainActor
-final class StubPartnerP6Tests: XCTestCase {
+final class StubPartnerBackendTests: XCTestCase {
     func testViewerScenarioIsReadOnlyOnTheServerSideToo() async throws {
         let services = try StubBackend.make(partnerViewer: true)
         try await services.partnerAuth.accept(token: "stubpartner" + String(repeating: "x", count: 24))
@@ -399,15 +399,15 @@ final class StubPartnerP6Tests: XCTestCase {
         XCTAssertEqual(model.role, .viewer)
         XCTAssertEqual(model.overview?.userID, "u2")
         XCTAssertTrue(model.exports.isEmpty, "a viewer never loads exports")
-        do { try await services.partner.inviteUser(email: "n@x.com", name: "N", role: .viewer); XCTFail() }
+        do { try await services.partner.inviteUser(email: "n@x.com", name: "N", role: .viewer); XCTFail("inviteUser must throw") }
         catch { XCTAssertEqual(error as? AccountError, .forbidden) }
-        do { _ = try await services.partner.report(); XCTFail() }
+        do { _ = try await services.partner.report(); XCTFail("report must throw") }
         catch { XCTAssertEqual(error as? AccountError, .forbidden) }
     }
 
     func testServerRefusesToRemoveTheSignedInUser() async throws {
         let services = try StubBackend.make(partnerSignedIn: true)
-        do { try await services.partner.removeUser(id: "u1"); XCTFail() }
+        do { try await services.partner.removeUser(id: "u1"); XCTFail("removeUser must throw") }
         catch { XCTAssertEqual(error as? AccountError, .conflict) }
         let model = PartnerModel(service: services.partner)
         await model.load()

@@ -122,20 +122,34 @@ final class FoundationTests: XCTestCase {
         catch { XCTAssertEqual(error as? AccountError, .signedOut) }
         XCTAssertEqual(try store.load()?.access, "claimed")
     }
-    func testLinkOriginProofAndNotificationAllowlist() throws {
+
+    func testClaimLinksRequireTheExactOriginAndFragment() throws {
         let router = try LinkRouter(publicOrigin: XCTUnwrap(URL(string: "https://public.test")))
         let token = String(repeating: "a", count: 32)
         XCTAssertEqual(router.route(URL(string: "https://public.test/account/claim#token=\(token)&next=/account/dashboard")!), .claim(token: token, next: .dashboard))
         for value in ["https://evil.test/account/dashboard", "http://public.test/account/profile", "https://user@public.test/account/profile", "https://public.test/account%2fclaim#token=\(token)", "https://public.test/account/claim#token=\(token)&next=https://evil.test", "https://public.test/account/claim#token=\(token)&token=\(token)"] {
             XCTAssertNil(router.route(URL(string: value)!), value)
         }
+    }
+
+    func testPartnerAcceptLinksRequireAShapedFragmentAndNoNext() throws {
+        let router = try LinkRouter(publicOrigin: XCTUnwrap(URL(string: "https://public.test")))
+        let token = String(repeating: "a", count: 32)
         XCTAssertEqual(router.route(URL(string: "https://public.test/partner/accept#token=\(token)")!), .partnerSignIn(token: token))
         for value in ["https://public.test/partner/accept#token=\(token)&next=/account/dashboard", "https://public.test/partner/accept?x=1#token=\(token)", "https://public.test/partner/accept#token=short"] {
             XCTAssertNil(router.route(URL(string: value)!), value)
         }
+    }
+
+    func testNotificationPathsAreAllowlisted() throws {
+        let router = try LinkRouter(publicOrigin: XCTUnwrap(URL(string: "https://public.test")))
         XCTAssertEqual(router.notification(path: "/account/payment-method"), .paymentMethod)
         XCTAssertEqual(router.notification(path: "/account/gifts"), .gifts)
         XCTAssertNil(router.notification(path: "https://public.test/account/dashboard"))
+    }
+
+    func testReferralAndCompanyLinksRouteOnlyWithAValidShape() throws {
+        let router = try LinkRouter(publicOrigin: XCTUnwrap(URL(string: "https://public.test")))
         XCTAssertEqual(router.route(URL(string: "https://public.test/r/friend?via=irl")!), .referral(code: "friend", inPerson: true))
         XCTAssertEqual(router.route(URL(string: "https://public.test/r/friend_2-x")!), .referral(code: "friend_2-x", inPerson: false))
         XCTAssertEqual(router.route(URL(string: "https://public.test/c/ACME-1")!), .company(code: "ACME-1"))
@@ -144,6 +158,9 @@ final class FoundationTests: XCTestCase {
             XCTAssertEqual(router.route(URL(string: value)!), .web(URL(string: value)!), value)
         }
         XCTAssertNil(router.route(URL(string: "https://evil.test/r/friend")!))
+    }
+
+    func testNavigationGateDefersARouteUntilSignedIn() {
         var gate = NavigationGate()
         XCTAssertNil(gate.receive(.dashboard, signedIn: false))
         XCTAssertEqual(gate.signedIn(), .dashboard)

@@ -89,3 +89,21 @@ final class WipeBox: @unchecked Sendable {
 func assertBodyRejected(_ error: Error, file: StaticString = #filePath, line: UInt = #line) {
     XCTAssertTrue(error is ClientError || (error as? AccountError) == .invalidResponse, "\(error)", file: file, line: line)
 }
+
+final class LockedBox<Value: Sendable>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: Value
+    init(_ value: Value) { self.value = value }
+    func set(_ new: Value) { lock.withLock { value = new } }
+    func get() -> Value { lock.withLock { value } }
+}
+
+final class KeptReferral: @unchecked Sendable {
+    private let lock = NSLock()
+    private var token: String?
+    init(_ token: String?) { self.token = token }
+    var value: String? {
+        get { lock.withLock { token } }
+        set { lock.withLock { token = newValue } }
+    }
+}

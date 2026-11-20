@@ -63,7 +63,7 @@ final class WireAccountSettingsTests: XCTestCase {
         let transport = ScriptedTransport { seen, _ in seen.request.method == .post ? (.conflict, "{}") : (.ok, profileJSON()) }
         let rig = try make(transport)
         let current = try await rig.settings.load().preferences
-        do { _ = try await rig.settings.savePreferences(try current.addingInterest("Tutoring").get()); XCTFail() }
+        do { _ = try await rig.settings.savePreferences(try current.addingInterest("Tutoring").get()); XCTFail("savePreferences must throw") }
         catch { XCTAssertEqual(error as? AccountError, .conflict) }
     }
 
@@ -142,7 +142,7 @@ final class WireAccountSettingsTests: XCTestCase {
     func testDeleteBlockedBy409KeepsTheSessionAndExplains() async throws {
         let transport = ScriptedTransport { _, _ in (.conflict, "{}") }
         let rig = try make(transport)
-        do { try await rig.settings.deleteAccount(); XCTFail() }
+        do { try await rig.settings.deleteAccount(); XCTFail("deleteAccount must throw") }
         catch {
             XCTAssertEqual(error as? AccountError, .deletionBlocked)
             XCTAssertTrue(error.userMessage.contains("Cancel your monthly gift"))
@@ -183,7 +183,7 @@ final class WireAccountSettingsTests: XCTestCase {
 
     func testDeleteWhenRefreshIsRevokedEndsSignedOutWithoutWipingAppData() async throws {
         let rig = try make(ScriptedTransport { _, _ in (.unauthorized, "{}") })
-        do { try await rig.settings.deleteAccount(); XCTFail() }
+        do { try await rig.settings.deleteAccount(); XCTFail("deleteAccount must throw") }
         catch { XCTAssertEqual(error as? AccountError, .signedOut) }
         XCTAssertNil(try rig.store.load())
         XCTAssertEqual(rig.wiped.count, 0, "nothing was deleted server-side")

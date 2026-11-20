@@ -571,7 +571,7 @@ final class WirePartnerTests: XCTestCase {
         let store = MemoryStore(nil)
         let session = try PartnerSession(store: store)
         try await session.install(token: "PB")
-        do { _ = try await WirePartner(origin: testOrigin, transport: transport, session: session).overview(); XCTFail() }
+        do { _ = try await WirePartner(origin: testOrigin, transport: transport, session: session).overview(); XCTFail("overview must throw") }
         catch { XCTAssertEqual(error as? AccountError, .signedOut) }
         XCTAssertNil(try store.load())
     }

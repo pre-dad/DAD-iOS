@@ -39,7 +39,7 @@ private actor ScriptedEvents: EventsService {
     }
     func event(id: String) async throws -> DonorEvent {
         if let detailError { throw detailError }
-        let result = list.first { $0.id == id }!
+        guard let result = list.first(where: { $0.id == id }) else { throw AccountError.notFound }
         await detailGate?.pass()
         return result
     }
@@ -286,7 +286,6 @@ final class CheckInModelHardeningTests: XCTestCase {
     }
 
     func testServerRefusalsReadAsEventMessages() async {
-        let service = ScriptedEvents(list: [])
         let cases: [(AccountError, String)] = [
             (.forbidden, "You’re not eligible to check in to this event."),
             (.rateLimited, "Too many attempts. Please wait a moment and try again."),
@@ -296,7 +295,6 @@ final class CheckInModelHardeningTests: XCTestCase {
             await model.submit(code: validCheckInToken, window: window, now: inside)
             XCTAssertEqual(model.state, .failed(message))
         }
-        _ = service
     }
 
     func testSignedOutIsFlagged() async {

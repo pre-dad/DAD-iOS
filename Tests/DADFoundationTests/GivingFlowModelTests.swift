@@ -437,7 +437,7 @@ final class GivingFlowModelTests: XCTestCase {
             await m.startGift()
             guard case .failed = m.phase else { XCTFail("\(error)"); continue }
             XCTAssertNil(m.handoff)
-            XCTAssertFalse(m.isBusy == true && m.phase == .working)
+            XCTAssertFalse(m.isBusy)
         }
     }
 
