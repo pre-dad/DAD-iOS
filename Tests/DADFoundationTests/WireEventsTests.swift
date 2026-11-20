@@ -120,7 +120,8 @@ final class WireEventsTests: XCTestCase {
     }
 
     func testUnknownReservationResultStatusIsNotASuccess() async throws {
-        for json in [#"{"status":"PENDING"}"#] {
+        for status in ["PENDING", "HELD"] {
+            let json = #"{"status":"\#(status)"}"#
             let reserve = try make(ScriptedTransport { _, _ in (.ok, json) })
             do { _ = try await reserve.service.reserve(eventID: eventA); XCTFail() } catch { XCTAssertEqual(error as? AccountError, .invalidResponse) }
             let cancel = try make(ScriptedTransport { _, _ in (.ok, json) })

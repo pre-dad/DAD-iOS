@@ -7,9 +7,8 @@ import XCTest
 private let initiativeID = "11111111-1111-4111-8111-111111111111"
 
 private func dashboardJSON(rank: String = #"{"national_percentile":2,"city":"Austin","city_rank":4,"computed_at":"2026-10-30T00:00:00Z"}"#,
-                           optedOut: Bool = false, given: String = "124000", referrals: String =
-                           #"{"currency":"USD","irl":1,"irl_minor":3000,"link":2,"link_minor":9000,"total_minor":12000}"#) -> String {
-    #"{"state":"ready","mode":"test","computed_at":"2026-10-30T12:00:00Z","founding_donor":true,"referrals":\#(referrals),"streak":null,"rank":\#(rank),"rankings_opted_out":\#(optedOut),"network":null,"impact":{"given_minor":\#(given),"currency":"USD","initiatives_funded":4,"events_volunteered":2}}"#
+                           optedOut: Bool = false, given: String = "124000", referrals: String? = nil) -> String {
+    dashboardReadyJSON(streak: "null", rank: rank, optedOut: optedOut, network: "null", referrals: referrals, given: given)
 }
 private let preparingJSON = #"{"state":"preparing","mode":"test"}"#
 
@@ -181,7 +180,7 @@ final class WireEngagementTests: XCTestCase {
     }
 
     func testASecondUnauthorizedEndsTheSessionAndThrowsSignedOut() async throws {
-        let rig = try make(ScriptedTransport { seen, _ in seen.request.path == "/donor/refresh" ? (.unauthorized, "{}") : (.unauthorized, "{}") })
+        let rig = try make(ScriptedTransport { _, _ in (.unauthorized, "{}") })
         await assertThrows(.signedOut) { _ = try await rig.service.snapshot() }
         XCTAssertNil(try rig.store.load())
     }
@@ -235,10 +234,7 @@ final class WireEngagementTests: XCTestCase {
         })
         let service = rig.service
         let task = Task { try await service.snapshot() }
-        await gate.waitUntilEntered()
-        task.cancel()
-        await gate.release()
-        do { _ = try await task.value; XCTFail() } catch { XCTAssertTrue(error.isCancellation, "\(error)") }
+        await assertCancels(task, at: gate)
         XCTAssertNotNil(try rig.store.load())
     }
 
@@ -411,10 +407,7 @@ final class WireEngagementTests: XCTestCase {
         })
         let service = rig.service
         let task = Task { try await service.setRankingOptIn(false) }
-        await gate.waitUntilEntered()
-        task.cancel()
-        await gate.release()
-        do { _ = try await task.value; XCTFail() } catch { XCTAssertTrue(error.isCancellation, "\(error)") }
+        await assertCancels(task, at: gate)
         XCTAssertNotNil(try rig.store.load())
     }
 
@@ -491,9 +484,6 @@ final class WireEngagementTests: XCTestCase {
         })
         let service = rig.service
         let task = Task { try await service.initiativeSpend(id: initiativeID) }
-        await gate.waitUntilEntered()
-        task.cancel()
-        await gate.release()
-        do { _ = try await task.value; XCTFail() } catch { XCTAssertTrue(error.isCancellation, "\(error)") }
+        await assertCancels(task, at: gate)
     }
 }

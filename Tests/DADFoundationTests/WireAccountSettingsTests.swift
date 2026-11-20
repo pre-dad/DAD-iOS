@@ -201,6 +201,9 @@ final class WireAccountSettingsTests: XCTestCase {
         let results = [await first.result, await second.result]
         XCTAssertTrue(results.contains { if case .success = $0 { true } else { false } })
         XCTAssertEqual(transport.calls(to: "/donor/refresh").count, 1, "refresh is single-flight")
+        let succeeded = results.filter { if case .success = $0 { true } else { false } }.count
+        XCTAssertEqual(rig.wiped.count, succeeded, "local data is wiped once per completed delete")
+        XCTAssertGreaterThanOrEqual(transport.calls(to: "/donor/me/delete").count, succeeded)
     }
 
     func testSignOutClearsLocalFirstAndToleratesRemoteFailure() async throws {

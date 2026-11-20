@@ -46,3 +46,13 @@ final class DesignTokenTests: XCTestCase {
         XCTAssertNil(Color.parseHex("#ggg"))
     }
 }
+
+final class ComponentTokenTests: XCTestCase {
+    func testKnownTokenResolvesAndUnknownFallsBack() {
+        XCTAssertNotNil(DADTokens.color["brand"])
+        XCTAssertEqual(CGFloat.dadSpace("4"), 16)
+        XCTAssertEqual(CGFloat.dadRadius("pill"), 100)
+        // Unknown token name yields 0 spacing rather than a crash.
+        XCTAssertEqual(CGFloat.dadSpace("nope"), 0)
+    }
+}

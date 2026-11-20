@@ -77,6 +77,15 @@ actor Gate {
     func release() { open = true; waiters.forEach { $0.resume() }; waiters = [] }
 }
 
+/// Lets `task` reach its gated call, cancels it, and asserts the cancellation surfaces as such.
+func assertCancels<T: Sendable>(_ task: Task<T, Error>, at gate: Gate, file: StaticString = #filePath, line: UInt = #line) async {
+    await gate.waitUntilEntered()
+    task.cancel()
+    await gate.release()
+    do { _ = try await task.value; XCTFail("expected cancellation", file: file, line: line) }
+    catch { XCTAssertTrue(error.isCancellation, "\(error)", file: file, line: line) }
+}
+
 final class WipeBox: @unchecked Sendable {
     private let lock = NSLock()
     private var hits = 0
@@ -106,4 +115,12 @@ final class KeptReferral: @unchecked Sendable {
         get { lock.withLock { token } }
         set { lock.withLock { token = newValue } }
     }
+}
+
+func dashboardReadyJSON(streak: String? = nil, rank: String = "null", optedOut: Bool = false, network: String? = nil,
+                        referrals: String? = nil, given: String = "124000") -> String {
+    let streakJSON = streak ?? #"{"at_risk":false,"current":18,"grace_ends_at":null,"ladder":{"days":18,"last_milestone":7,"next_milestone":30,"days_to_next":12,"bar":[true,true,true,false]}}"#
+    let networkJSON = network ?? #"{"active_count":3,"annualized_minor":474500,"currency":"USD"}"#
+    let referralsJSON = referrals ?? #"{"currency":"USD","irl":1,"irl_minor":3000,"link":2,"link_minor":9000,"total_minor":12000}"#
+    return #"{"state":"ready","mode":"test","computed_at":"2026-10-30T12:00:00Z","founding_donor":true,"referrals":\#(referralsJSON),"streak":\#(streakJSON),"rank":\#(rank),"rankings_opted_out":\#(optedOut),"network":\#(networkJSON),"impact":{"given_minor":\#(given),"currency":"USD","initiatives_funded":4,"events_volunteered":2}}"#
 }

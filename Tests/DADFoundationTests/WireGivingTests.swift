@@ -131,11 +131,7 @@ final class WireGivingTests: XCTestCase {
         }
         let rig = try make(transport)
         let task = Task { try await rig.service.recurring() }
-        await gate.waitUntilEntered()
-        task.cancel()
-        await gate.release()
-        do { _ = try await task.value; XCTFail() }
-        catch { XCTAssertTrue(error.isCancellation, "\(error)") }
+        await assertCancels(task, at: gate)
         XCTAssertNotNil(try rig.store.load())
     }
 
@@ -255,7 +251,7 @@ final class WireGivingTests: XCTestCase {
         XCTAssertEqual(transport.seen.count, 1)
     }
 
-    func testMalformedChangeResponseStillSucceedsOnlyIfDecodedElseThrowsAndKeepsKey() async throws {
+    func testMalformedChangeResponseKeepsTheIdempotencyKeyForTheRetry() async throws {
         // Success status but a body that does not decode: the outcome is unknown, so the key survives.
         let transport = amountServer { _, index in index < 2 ? (.ok, #"{"oops":1}"#) : (.ok, amountChangeJSON()) }
         let rig = try make(transport)
@@ -277,11 +273,7 @@ final class WireGivingTests: XCTestCase {
         }
         let rig = try make(transport)
         let task = Task { try await rig.service.changeAmount(subscriptionID: subID, to: 30000) }
-        await gate.waitUntilEntered()
-        task.cancel()
-        await gate.release()
-        do { _ = try await task.value; XCTFail() }
-        catch { XCTAssertTrue(error.isCancellation, "\(error)") }
+        await assertCancels(task, at: gate)
         XCTAssertNotNil(try rig.store.load())
     }
 
