@@ -112,14 +112,20 @@ public struct RankingStanding: Sendable, Equatable {
     /// "Top 2% nationally" — only when a percentile exists. The server's `national_percentile` is already
     /// the *top* bucket (1 = top 1%, 2 = top 2%), so it is shown as is, never as `100 - p`. Clamped to
     /// 1...100 so a stray value cannot read "Top 0%" or "Top -3%".
-    public var nationalLabel: String? {
-        guard let p = nationalPercentile else { return nil }
-        return "Top \(min(100, max(1, p)))% nationally"
-    }
+    public var nationalLabel: String? { nationalPercentile.map(RankingLabel.national) }
 
     /// "#3 in Austin" — only when both a city and a rank exist.
-    public var cityLabel: String? {
-        guard let city, let rank = cityRank else { return nil }
+    public var cityLabel: String? { RankingLabel.city(city, rank: cityRank) }
+}
+
+/// The ranking lines the dashboard and engagement cards share, so both clamp and omit alike.
+enum RankingLabel {
+    /// "Top 2% nationally"; the percentile is clamped to 1...100 so a stray value cannot read "Top 0%".
+    static func national(_ percent: Int) -> String { "Top \(min(100, max(1, percent)))% nationally" }
+
+    /// "#3 in Austin"; nil unless there is a non-empty city and a rank.
+    static func city(_ city: String?, rank: Int?) -> String? {
+        guard let city, !city.isEmpty, let rank else { return nil }
         return "#\(rank) in \(city)"
     }
 }

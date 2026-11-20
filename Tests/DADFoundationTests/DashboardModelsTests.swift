@@ -39,6 +39,19 @@ private let sampleDashboard = DonorDashboard(
 
 private let sampleToday = TodayInitiative(id: "i", slug: "s", title: "Meals", summary: "x", location: "Austin", kind: "PROGRAM", startedOn: "2025-01-01", metrics: [])
 
+final class RankingLabelTests: XCTestCase {
+    func testBothRankCardsClampAndOmitTheSameWay() {
+        XCTAssertEqual(DashboardRank(topPercent: 0, city: nil, cityRank: nil).nationalLabel, "Top 1% nationally")
+        XCTAssertEqual(DashboardRank(topPercent: 250, city: nil, cityRank: nil).nationalLabel, "Top 100% nationally")
+        XCTAssertEqual(RankingStanding(nationalPercentile: 0, city: nil, cityRank: nil).nationalLabel, "Top 1% nationally")
+        XCTAssertEqual(RankingStanding(nationalPercentile: 250, city: nil, cityRank: nil).nationalLabel, "Top 100% nationally")
+        XCTAssertNil(RankingStanding(nationalPercentile: nil, city: nil, cityRank: nil).nationalLabel)
+        XCTAssertNil(DashboardRank(topPercent: 2, city: "", cityRank: 4).cityLabel)
+        XCTAssertNil(RankingStanding(nationalPercentile: 2, city: "", cityRank: 4).cityLabel)
+        XCTAssertEqual(RankingStanding(nationalPercentile: 2, city: "Austin", cityRank: 4).cityLabel, "#4 in Austin")
+    }
+}
+
 @MainActor final class DashboardModelTests: XCTestCase {
     func testLoadShowsDashboardAndInitiative() async {
         let service = ScriptedDashboard()

@@ -1,8 +1,8 @@
 import Foundation
 
 // Donor events & volunteering (PRD E-1..E-10, §6.11). Pure value types and the display /
-// eligibility rules live here so event availability, the check-in window, invite-only
-// gating and reservation transitions are unit-testable without a network, a camera, or UI.
+// eligibility rules for event availability, the check-in window, invite-only gating and
+// reservation transitions.
 //
 // The server is always authoritative for reservation and check-in (capacity races, the
 // exact window). These rules are the *client-side* pre-checks that drive what the UI

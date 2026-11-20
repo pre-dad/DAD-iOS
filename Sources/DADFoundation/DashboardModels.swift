@@ -49,7 +49,7 @@ public struct StreakCard: Sendable, Equatable {
     public var headline: String { "\(current)-day streak" }
 }
 
-/// The donor's own standing (S-4). `nationalPercentile` is the server's *top* bucket: 2 means
+/// The donor's own standing (S-4). `topPercent` is the server's *top* bucket: 2 means
 /// "Top 2%" (the PRD example), the opposite sense of a conventional percentile.
 public struct DashboardRank: Sendable, Equatable {
     public let topPercent: Int
@@ -58,11 +58,8 @@ public struct DashboardRank: Sendable, Equatable {
     public init(topPercent: Int, city: String?, cityRank: Int?) {
         self.topPercent = topPercent; self.city = city; self.cityRank = cityRank
     }
-    public var nationalLabel: String { "Top \(max(1, topPercent))% nationally" }
-    public var cityLabel: String? {
-        guard let city, !city.isEmpty, let rank = cityRank else { return nil }
-        return "#\(rank) in \(city)"
-    }
+    public var nationalLabel: String { RankingLabel.national(topPercent) }
+    public var cityLabel: String? { RankingLabel.city(city, rank: cityRank) }
 }
 
 /// What the rank line shows. Opted out is the explicit server flag, distinct from "opted in but not
