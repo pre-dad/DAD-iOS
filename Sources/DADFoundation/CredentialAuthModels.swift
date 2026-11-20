@@ -5,8 +5,6 @@ import Foundation
 // Passwords are never stored, logged or echoed: models clear them once a call succeeds or the session ends, and
 // keep them after any other failure so the donor can retry.
 
-// MARK: - Shared input rules
-
 /// Input rules shared by signup, password sign-in and the partner invite field.
 public enum CredentialRules {
     /// Plausible-address check (same rule as Android and the partner invite field): trimmed, at
@@ -41,8 +39,6 @@ public enum CredentialRules {
     }
 }
 
-// MARK: - Services
-
 public struct SignupForm: Sendable, Equatable {
     public let name: String
     public let email: String
@@ -75,8 +71,6 @@ public protocol PasswordSignInService: Sendable {
 public protocol PasswordSettingsService: Sendable {
     func setPassword(current: String?, new: String) async throws
 }
-
-// MARK: - Signup model
 
 @MainActor @Observable
 public final class SignupModel {
@@ -132,8 +126,6 @@ public final class SignupModel {
     }
 }
 
-// MARK: - Sign-in link model
-
 @MainActor @Observable
 public final class SignInLinkModel {
     public enum Phase: Equatable {
@@ -178,8 +170,6 @@ public final class SignInLinkModel {
         }
     }
 }
-
-// MARK: - Password sign-in model
 
 @MainActor @Observable
 public final class PasswordSignInModel {
@@ -234,8 +224,6 @@ public final class PasswordSignInModel {
         }
     }
 }
-
-// MARK: - Set / change password (Settings)
 
 @MainActor @Observable
 public final class PasswordChangeModel {

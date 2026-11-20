@@ -223,8 +223,6 @@ public final class GivingModel {
         notice = Self.outcome(finished.purpose, settled: settled, recurring: recurring, payment: payment)
     }
 
-    // MARK: - private
-
     private func begin(_ purpose: HostedHandoff.Purpose, _ open: () async throws -> PaymentPath) async {
         phase = .working
         notice = nil
@@ -284,7 +282,7 @@ public final class GivingModel {
     }
 
     private func fail(_ error: Error, rereadOnConflict: Bool = false, message: String? = nil) async {
-        if error.isCancellation { phase = .idle; return }   // abandoned, not failed: prior state stands
+        if error.isCancellation { phase = .idle; return }
         if case AccountError.signedOut = error { signedOut = true }
         if rereadOnConflict, case AccountError.conflict = error {
             // Billing moved under the screen: pull the new truth in so the donor reviews current figures.

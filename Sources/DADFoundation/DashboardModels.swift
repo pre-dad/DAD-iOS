@@ -5,8 +5,6 @@ import Foundation
 // types and models; the network sits behind `DashboardService`. Money is integer USD minor units
 // (int64 on the wire) formatted only by `formatUSDMinor`. Nothing here logs.
 
-// MARK: - Dashboard
-
 /// The 30-day streak card ladder (S-2/S-3). `bar` has one segment per day of the current window.
 public struct StreakLadder: Sendable, Equatable {
     public let days: Int
@@ -102,8 +100,6 @@ public enum DashboardState: Sendable, Equatable {
     case ready(DonorDashboard)
 }
 
-// MARK: - Today's initiative
-
 public struct InitiativeMetric: Sendable, Equatable, Identifiable {
     public enum Unit: String, Sendable, Equatable { case usdCents = "USD_CENTS", people = "PEOPLE", initiatives = "INITIATIVES", partners = "PARTNERS" }
     public let label: String
@@ -144,8 +140,6 @@ public struct TodayInitiative: Sendable, Equatable {
     /// A-5: display attribution, not designated giving. Counsel owns the final wording.
     public static let attributionNote = "This shows where today’s rotation points. All gifts are unrestricted."
 }
-
-// MARK: - Gifts
 
 public struct GiftEntry: Sendable, Equatable, Identifiable {
     public enum Frequency: String, Sendable, Equatable { case monthly = "MONTHLY", oneTime = "ONE_TIME" }
@@ -208,8 +202,6 @@ public struct AnnualGivingSummary: Sendable, Equatable {
     public var netLabel: String { formatUSDMinor(netMinor) }
 }
 
-// MARK: - Service seam
-
 /// The donor-home read seam. `todayInitiative` answers nil for a 404 (nothing in rotation today).
 public protocol DashboardService: Sendable {
     func dashboard() async throws -> DashboardState
@@ -218,8 +210,6 @@ public protocol DashboardService: Sendable {
     func receipt(giftID: String) async throws -> GiftReceipt
     func annualSummary(year: Int) async throws -> AnnualGivingSummary
 }
-
-// MARK: - Dashboard model
 
 /// Drives the donor home cards. A refresh that fails or is cancelled keeps the cards already on
 /// screen (a notice explains a failed one); only a first load with nothing to show becomes `.failed`.
@@ -285,8 +275,6 @@ public final class DashboardModel {
         do { return .success(try await work()) } catch { return .failure(error) }
     }
 }
-
-// MARK: - Gift history model
 
 /// Paginated gift history (50 rows a page from the server). Memory is bounded: past `maxRows` the model
 /// stops fetching and says so. A reload or `cancel()` invalidates any page in flight.

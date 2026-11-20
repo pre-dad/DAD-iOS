@@ -4,8 +4,6 @@ import Foundation
 // display/eligibility rules live here so badge state, rankings opt-out, impact formatting
 // and QR payloads are unit-testable.
 
-// MARK: - Badges (B-1..B-4)
-
 /// A single badge as the badges grid renders it. `earned` drives colour vs. greyed, but the
 /// grid must never rely on colour alone (PRD §10 / WCAG): `accessibilityLabel` and the
 /// visible `rule` text carry the earned/locked state for VoiceOver and colour-blind users.
@@ -85,8 +83,6 @@ public struct BadgeCollection: Sendable, Equatable {
     public var summaryLabel: String { "\(earnedCount) of \(total) earned" }
 }
 
-// MARK: - Rankings (K-1..K-3)
-
 /// A donor's standing. Opt-out is the explicit server flag (`rankings_opted_out`), distinct from
 /// "opted in but not ranked yet" (null rank with the flag false). The UI never renders a zero as
 /// a rank, and there is never a public name list, only the viewer's own percentile/city position.
@@ -130,8 +126,6 @@ enum RankingLabel {
     }
 }
 
-// MARK: - Impact (A-*, I-1..I-3)
-
 /// Lifetime impact totals. `givenMinor` is nullable by contract: when the backend hasn't
 /// computed it we show "—", never "$0", so an unknown total is never mistaken for nothing given.
 public struct ImpactTotals: Sendable, Equatable {
@@ -164,8 +158,6 @@ public struct SpendSlice: Sendable, Equatable, Identifiable {
     }
     public var amountLabel: String { formatUSDMinor(amountMinor) }
 }
-
-// MARK: - Network (N-1..N-3)
 
 /// One opted-in person the donor brought in (N-3): first name and last initial, and whether they still give.
 public struct NetworkInvitee: Sendable, Equatable, Hashable, Identifiable {
@@ -233,8 +225,6 @@ public struct Conversion: Sendable, Equatable, Identifiable {
     public var id: String { "\(convertedAt.timeIntervalSince1970)-\(kind.label)" }
     public init(convertedAt: Date, kind: ConversionKind) { self.convertedAt = convertedAt; self.kind = kind }
 }
-
-// MARK: - Referral / IRL (R-1..R-4)
 
 /// The data behind the invite + IRL screens. Splits link vs. in-real-life attributed giving
 /// and builds the invite URL + QR payload a donor shares. The counts and the conversions list are nil

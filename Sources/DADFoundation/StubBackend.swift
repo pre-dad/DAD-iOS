@@ -3,6 +3,15 @@ import Foundation
 import HTTPTypes
 import OpenAPIRuntime
 
+public final class InMemoryCredentialStore: CredentialStore, @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: Credentials?
+    public init(_ value: Credentials? = nil) { self.value = value }
+    public func load() throws -> Credentials? { lock.withLock { value } }
+    public func save(_ credentials: Credentials) throws { lock.withLock { value = credentials } }
+    public func clear() throws { lock.withLock { value = nil } }
+}
+
 /// DEBUG-only scripted backend for the simulator UITests. It is NOT a preview double: the app
 /// runs the REAL `WireAuth`, `WireAccountSettings`, `WireAPI`, `AccountSession` and keychain-shaped
 /// store on top of it, so a UITest drives the same code a release build uses, with only the
@@ -24,15 +33,6 @@ import OpenAPIRuntime
 /// portal is an ADMIN at Acme with two users, one unverified figure, an earlier export and no logo. Link
 /// capture answers like the server: referral code `ALEX42` is Alex R's, company code `ACME42` is Acme's, and
 /// any other code keeps the token sent, if any; the checkout records the referral token it was given.
-public final class InMemoryCredentialStore: CredentialStore, @unchecked Sendable {
-    private let lock = NSLock()
-    private var value: Credentials?
-    public init(_ value: Credentials? = nil) { self.value = value }
-    public func load() throws -> Credentials? { lock.withLock { value } }
-    public func save(_ credentials: Credentials) throws { lock.withLock { value = credentials } }
-    public func clear() throws { lock.withLock { value = nil } }
-}
-
 public enum StubBackend {
     public static let origin = URL(string: "https://stub.invalid")!
     /// Where a stub-backed launch keeps its link tokens, apart from a real install's.
@@ -293,9 +293,6 @@ private final class StubTransport: ClientTransport, @unchecked Sendable {
         }
     }
 
-
-    // MARK: events
-
     private struct StubEvent {
         let id: String, slug: String, title: String, type: String, venue: String, city: String
         let startOffset: TimeInterval, duration: TimeInterval, capacity: Int, taken: Int
@@ -389,8 +386,6 @@ private final class StubTransport: ClientTransport, @unchecked Sendable {
         default: return nil
         }
     }
-
-    // MARK: engagement
 
     private static let badges = #"{"badges":[{"code":"F","title":"Founding Donor","rule":"Start a monthly gift before January 2027, or join the website waitlist","perk":"FOUNDING_EVENTS","earned":true,"earned_at":"2026-09-02T10:00:00Z","artwork":"f","city":null,"display_title":"Founding Donor"},{"code":"7","title":"One Week","rule":"Reach a 7-day streak","perk":"","earned":true,"earned_at":"2026-10-14T10:00:00Z","artwork":"7","city":null,"display_title":"One Week"},{"code":"30","title":"One Month","rule":"Reach a 30-day streak","perk":"","earned":false,"earned_at":null,"artwork":"30","city":null,"display_title":"One Month"},{"code":"1K","title":"1,000 Days","rule":"Reach a 1,000-day streak","perk":"MILESTONE_EVENTS","earned":false,"earned_at":null,"artwork":"1k","city":null,"display_title":"1,000 Days"},{"code":"TC","title":"Team Captain","rule":"Twenty people you invited complete a gift","perk":"TEAM_CAPTAIN","earned":false,"earned_at":null,"artwork":"tc","city":null,"display_title":"Team Captain"},{"code":"CITY50","title":"Top 50 City","rule":"Rank in the top 50 donors in your city","perk":"","earned":true,"earned_at":"2026-10-20T10:00:00Z","artwork":"c50","city":"Chicago","display_title":"Top 50 in Chicago"}]}"#
     private static let network = #"{"active_count":3,"annualized_minor":474500,"next_milestone":{"label":"Team Captain","target":20,"remaining":17},"invitees":[{"name":"Sam L","active":true},{"name":"Jo P","active":false}],"anonymous_active":1}"#
@@ -637,8 +632,6 @@ private final class StubTransport: ClientTransport, @unchecked Sendable {
         (payload.data(using: .utf8).flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [String: Any]) ?? [:]
     }
 
-    // MARK: donor-home reads
-
     private static let reads = ["/donor/me/dashboard", "/donor/me/today-initiative", "/donor/me/gifts", "/donor/me/receipts/", "/donor/me/annual-summary/"]
     private static let giftTotal = 120
     private static let ready = #"{"state":"ready","mode":"test","computed_at":"2026-10-30T12:00:00Z","founding_donor":true,"referrals":{"currency":"USD","irl":1,"irl_minor":3000,"link":2,"link_minor":9000,"total_minor":12000},"streak":{"at_risk":false,"current":18,"grace_ends_at":null,"ladder":{"days":18,"last_milestone":7,"next_milestone":30,"days_to_next":12,"bar":[true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,false,false,false,false,false,false,false,false,false,false,false,false]}},"rank":{"national_percentile":2,"city":"Austin","city_rank":4,"computed_at":"2026-10-30T00:00:00Z"},"rankings_opted_out":false,"network":{"active_count":3,"annualized_minor":474500,"currency":"USD"},"impact":{"given_minor":124000,"currency":"USD","initiatives_funded":4,"events_volunteered":2}}"#
@@ -705,7 +698,7 @@ private final class StubTransport: ClientTransport, @unchecked Sendable {
 
     func send(_ request: HTTPRequest, body: HTTPBody?, baseURL: URL, operationID: String) async throws -> (HTTPResponse, HTTPBody?) {
         var payload = ""
-        if let body { payload = try await String(collecting: body, upTo: 8192) }
+        if let body { payload = try await String(collecting: body, upTo: 262_144) }
         let authorized = request.headerFields[.authorization].map { $0.hasPrefix("Bearer stub-access-") } ?? false
         let isDeleted = lock.withLock { deleted }
         func reply(_ status: HTTPResponse.Status, _ json: String = "{}") -> (HTTPResponse, HTTPBody?) {

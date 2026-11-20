@@ -5,8 +5,6 @@ import Foundation
 // rules, and the batch envelope live here as pure values so emission is unit-testable without a
 // network.
 
-// MARK: - Event taxonomy (§9)
-
 /// The §9 analytics events. Raw values are the exact wire names the ingest enum accepts, so an
 /// event can never be mis-spelled at a call site.
 public enum AnalyticsEvent: String, Sendable, Equatable, CaseIterable, Codable {
@@ -54,8 +52,6 @@ public enum AnalyticsEvent: String, Sendable, Equatable, CaseIterable, Codable {
     }
 }
 
-// MARK: - One recorded event
-
 /// A single analytics event ready for the sink. `id` makes delivery idempotent (a retried batch
 /// carries the same ids); `journeyID` groups a flow (e.g. a whole signup). Construction validates
 /// the typed-property rule so an invalid event can never be buffered.
@@ -99,8 +95,6 @@ public struct AnalyticsRecord: Sendable, Equatable, Identifiable {
         self.journeyID = journeyID
     }
 }
-
-// MARK: - Batch envelope (the POST /analytics/events body)
 
 /// A batch of records for one ingest call. The schema caps a batch at 100 events, so the envelope
 /// enforces the cap by chunking — the recorder flushes one `AnalyticsBatch` per chunk.

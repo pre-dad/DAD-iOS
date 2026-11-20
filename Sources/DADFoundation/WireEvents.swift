@@ -143,8 +143,6 @@ public struct WireEvents: EventsService {
         }
     }
 
-    // MARK: - helpers
-
     /// A malformed id is a 404 server-side; refuse it before it becomes a path segment.
     private static func requireID(_ id: String) throws {
         guard UUID(uuidString: id) != nil else { throw AccountError.invalidInput }

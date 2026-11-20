@@ -72,8 +72,6 @@ public struct CheckInResultValue: Sendable, Equatable {
     }
 }
 
-// MARK: - Calendar export (E-6)
-
 /// An `.ics` file written to disk for the system share sheet. Opening it with Calendar adds the
 /// event; no calendar permission or entitlement is involved because the app never reads or writes
 /// the donor's calendar itself.
@@ -95,8 +93,6 @@ public enum CalendarExport {
         return url
     }
 }
-
-// MARK: - Events list/detail model (E-2, E-3, E-4, E-9)
 
 /// Drives the events list and detail. One load fetches the list; reserving/cancelling updates
 /// the affected event in place so the list and detail re-render without a full reload. A failed
@@ -270,8 +266,6 @@ extension DonorEvent {
         return copy
     }
 }
-
-// MARK: - Check-in model (E-8)
 
 /// Drives the QR check-in flow. The camera scanner (a device seam, validated structurally) feeds
 /// a scanned code in; this model applies the client-side window pre-check, calls the service, and

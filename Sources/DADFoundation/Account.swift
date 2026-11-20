@@ -4,8 +4,6 @@ import Foundation
 // Pure value types so the preferences block, its optimistic version, and the delete-account
 // confirm gate are unit-testable without I/O.
 
-// MARK: - Profile summary (read-only header)
-
 /// The account header settings shows. `accountRole` is fixed at creation and immutable (D-1), so
 /// it is display-only; the saved time zone controls the streak’s local-day rollover (§10).
 public struct AccountProfileSummary: Sendable, Equatable {
@@ -31,8 +29,6 @@ public struct AccountProfileSummary: Sendable, Equatable {
         return zip
     }
 }
-
-// MARK: - Preferences (§6.11)
 
 /// The donor's preference block, carrying the optimistic-concurrency `version` it was read at so a
 /// stale overwrite is rejected server-side. Payment-failure email is deliberately absent — it is
@@ -188,8 +184,6 @@ public struct AccountPreferences: Sendable, Equatable {
         return copy
     }
 }
-
-// MARK: - Delete account (store-mandated, §6.12)
 
 /// The delete-account confirm gate. Deletion is irreversible (backend removes personal data, keeps
 /// legally-required gift records), so the donor must type the exact word before the action enables.
