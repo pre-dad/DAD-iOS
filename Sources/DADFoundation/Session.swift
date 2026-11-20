@@ -197,12 +197,14 @@ public actor AccountSession {
     public func logout() async throws {
         let old = credentials
         let pending = flight?.task
-        try clearLocal()
+        // A keychain failure must not leave the server session alive: revoke remotely first, then report it.
+        let cleared = Result { try clearLocal() }
         var access = old?.access
         if let pending {
             do { access = try await pending.value.access }
-            catch { if access == nil { throw error } }
+            catch { if access == nil { try cleared.get(); throw error } }
         }
         if let access { try await api.logout(access: access) }
+        try cleared.get()
     }
 }

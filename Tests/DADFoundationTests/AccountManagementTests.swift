@@ -38,8 +38,10 @@ private actor FakeManagement: AccountManagementService {
     ]
     var team = EmployerTeam(organization: nil, teamName: nil, leaderboard: [])
     var everywhere = 0
+    var employerReadFailure: AccountError?
 
     func fail(_ error: AccountError?) { failure = error }
+    func failEmployerReads(_ error: AccountError?) { employerReadFailure = error }
     private func check() throws { if let failure { throw failure } }
 
     func saveProfile(zip: String, city: String, phone: String, timezoneOverride: String?) async throws -> AccountProfileSummary {
@@ -57,7 +59,11 @@ private actor FakeManagement: AccountManagementService {
     }
     func revokeOtherSessions() async throws -> [DeviceSessionSummary] { try check(); list.removeAll { !$0.current }; return list }
     func signOutEverywhere() async throws { try check(); everywhere += 1 }
-    func employer() async throws -> EmployerTeam { try check(); return team }
+    func employer() async throws -> EmployerTeam {
+        try check()
+        if let employerReadFailure { throw employerReadFailure }
+        return team
+    }
     func enroll(companyCode: String) async throws -> String {
         try check()
         guard companyCode == "ACME42" else { throw AccountError.invalidInput }
@@ -197,6 +203,21 @@ private actor FakeManagement: AccountManagementService {
         await model.joinTeam()
         guard case .ready(let joined) = model.phase else { return XCTFail("\(model.phase)") }
         XCTAssertEqual(joined.teamName, "Platform")
+    }
+
+    func testASavedChangeWhoseRefreshFailsIsNotReportedAsAFailedSave() async {
+        let service = FakeManagement()
+        let model = EmployerModel(service: service)
+        await model.load()
+        await service.failEmployerReads(.unavailable)
+        model.companyCode = "ACME42"
+        await model.enroll()
+        XCTAssertEqual(model.actionError, "Saved, but we couldn’t refresh your employer details. Reopen this screen to see them.")
+        XCTAssertEqual(model.companyCode, "", "the enrolment went through, so the typed code is spent")
+        await service.failEmployerReads(nil)
+        await model.load()
+        guard case .ready(let linked) = model.phase else { return XCTFail("\(model.phase)") }
+        XCTAssertEqual(linked.organization, "Acme")
     }
 
     func testEmployerAlreadyLinkedElsewhere() async {

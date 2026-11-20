@@ -172,6 +172,7 @@ final class AccountSessionResilienceTests: XCTestCase {
         let session = try AccountSession(api: api, store: ClearFailingStore(Credentials(access: "live", refresh: "r", expiresAt: .distantFuture)))
         do { try await session.logout(); XCTFail("a failed keychain clear must be visible to the caller") }
         catch { XCTAssertEqual(error as? AccountError, .secureStorage(-25308)) }
+        XCTAssertEqual(api.loggedOut, ["live"], "a keychain failure must not leave the server session alive")
         let signedIn = await session.isSignedIn
         XCTAssertFalse(signedIn, "no call may be authorized after logout, whatever the keychain did")
     }
