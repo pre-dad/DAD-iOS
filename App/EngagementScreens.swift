@@ -232,7 +232,8 @@ struct EngagementHome: View {
                 Label("This is what your invite shows", systemImage: "person.crop.circle.badge.plus")
                     .font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
                 Text("You invited them to DAD").font(.headline)
-                DADGiftFraming(monthly: "$30/month", daily: "$1 a day")
+                DADGiftFraming(monthly: "\(formatUSDMinor(GiftAmount.minimum.monthlyMinor))/month",
+                               daily: "\(formatUSDMinor(GiftAmount.minimum.dailyDollars * 100)) a day")
             }
         }.accessibilityElement(children: .contain).accessibilityIdentifier("invite-preview")
     }
