@@ -131,9 +131,10 @@ struct EmployerSection: View {
         if team.leaderboard.isEmpty {
             Text("Teams appear here once they have five members.").font(.footnote).foregroundStyle(.secondary)
         } else {
+            let ranksVerified = team.leaderboard.allSatisfy(\.metricsVerified)
             ForEach(Array(team.leaderboard.enumerated()), id: \.element.id) { index, row in
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(team.leaderboard.allSatisfy(\.metricsVerified) ? "\(index + 1). \(row.name)" : row.name).font(.subheadline.bold())
+                    Text(ranksVerified ? "\(index + 1). \(row.name)" : row.name).font(.subheadline.bold())
                     if row.metricsVerified {
                         Text("\(row.activeGivers) givers · \(formatUSDMinor(Int(clamping: row.annualizedMinor))) a year · \(row.avgStreakDays)-day average streak")
                             .font(.caption).foregroundStyle(.secondary)

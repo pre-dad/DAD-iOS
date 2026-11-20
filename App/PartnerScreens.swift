@@ -350,9 +350,10 @@ private struct PartnerPeopleSection: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Teams").font(.title3.bold()).accessibilityAddTraits(.isHeader)
                 Text("Teams with fewer than 5 people are left out.").font(.footnote).foregroundStyle(.secondary)
+                let ranksVerified = teams.allSatisfy(\.metricsVerified)
                 ForEach(Array(teams.enumerated()), id: \.element.id) { index, team in
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(teams.allSatisfy(\.metricsVerified) ? "\(index + 1). \(team.name)" : team.name)
+                        Text(ranksVerified ? "\(index + 1). \(team.name)" : team.name)
                         if team.metricsVerified {
                             Text("\(team.activeGivers) givers · \(formatUSDMinor(Int(team.annualizedMinor)))/yr")
                         } else { Text("Giving and streak figures are awaiting verification.") }
