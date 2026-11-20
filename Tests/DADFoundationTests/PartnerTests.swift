@@ -75,6 +75,9 @@ final class PartnerPeopleTests: XCTestCase {
         XCTAssertNil(suppressed.matchedLabel)
         XCTAssertNotNil(suppressed.suppressionNotice)
         XCTAssertTrue(suppressed.suppressionNotice!.contains("Fewer than 5"))
+        XCTAssertEqual([suppressed.enrolled, suppressed.givenMinor, suppressed.matchedMinor, suppressed.avgStreakDays,
+                        suppressed.volunteerMinutes, suppressed.teams], [0, 0, 0, 0, 0, 0])
+        XCTAssertFalse(suppressed.streakVerified)
     }
 
     func testUnsuppressedGroupShowsFigures() {

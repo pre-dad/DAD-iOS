@@ -72,7 +72,6 @@ public struct PartnerReportFile: Sendable, Equatable, Identifiable {
     public init(url: URL) { self.url = url }
 }
 
-// MARK: - Partner portal model (P-10..P-14)
 
 @MainActor
 @Observable
@@ -102,7 +101,9 @@ public final class PartnerModel {
     public private(set) var signedOut = false
     public private(set) var isBusy = false
     /// A report ready to share.
-    public var report: PartnerReportFile?
+    public var report: PartnerReportFile? {
+        didSet { if let old = oldValue, old.url != report?.url { try? FileManager.default.removeItem(at: old.url) } }
+    }
 
     /// The user awaiting an inline remove confirmation, if any.
     public private(set) var pendingRemoval: PartnerUser?
@@ -316,6 +317,7 @@ public final class PartnerModel {
         try? await service.unregisterPushDevice()
         do {
             try await service.signOut()
+            report = nil
             signedOut = true
         } catch {
             actionError = error.userMessage
@@ -324,7 +326,7 @@ public final class PartnerModel {
 
     private static func file(_ pdf: Data, name: String) throws -> PartnerReportFile {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(name).appendingPathExtension("pdf")
-        try pdf.write(to: url, options: .atomic)
+        try pdf.write(to: url, options: [.atomic, .completeFileProtection])
         return PartnerReportFile(url: url)
     }
 
@@ -335,7 +337,6 @@ public final class PartnerModel {
     }
 }
 
-// MARK: - Partner sign-in (approved partner users sign in with an emailed link)
 
 public protocol PartnerSignInService: Sendable {
     func requestSignInLink(email: String) async throws
@@ -400,7 +401,7 @@ public final class PartnerSignInModel {
         let token = URLComponents(string: text)?.fragment.flatMap { fragment in
             URLComponents(string: "?" + fragment)?.queryItems?.first { $0.name == "token" }?.value
         } ?? text
-        guard !token.isEmpty, !token.contains(" ") else {
+        guard !token.isEmpty, !token.contains(" "), !token.contains("://") else {
             phase = .failed("Paste the whole sign-in link from your email.")
             return
         }
