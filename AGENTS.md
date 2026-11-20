@@ -14,7 +14,8 @@ these; this file only adds what they do not say.
 ## Build and test
 
 - `node scripts/prepare-client.mjs` then the Xcode/CI path in the README.
-- Unit tests alone: `swift test`. **The App target only compiles under `xcodebuild` on
+- Unit tests alone: `swift test --disable-sandbox --force-resolved-versions` (the flags the README uses; drop
+  `--disable-sandbox` outside a sandboxed tool). **The App target only compiles under `xcodebuild` on
   CI** — `swift test` cannot catch an App-target or UITest compile break. CI is the gate.
 
 ## Branch and push discipline
