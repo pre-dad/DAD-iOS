@@ -19,3 +19,6 @@ Sources/DADFoundation/DADNullValue.swift
 
 # Local working docs (plans, gap analysis) are never committed.
 docs/
+
+# Agent working files (task plans, reviews); the skills links are local-only.
+.agents/
