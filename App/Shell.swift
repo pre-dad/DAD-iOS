@@ -80,7 +80,7 @@ struct DonorShell: View {
             .tabItem { Label("Giving", systemImage: "heart.fill") }
             .tag(DonorTab.giving)
         }
-        .tint(tokenColor("brand-ink"))
+        .tint(Color.dad("brand-ink"))
         .task(id: destinationKey) { route(destination) }
         .sheet(isPresented: $showSettings) {
             if let service = model.makeSettings() {
@@ -110,8 +110,8 @@ struct DonorShell: View {
             Button { showSettings = true } label: {
                 Text(avatarInitial).font(.subheadline.weight(.semibold))
                     .frame(width: avatarSize, height: avatarSize)
-                    .background(tokenColor("brand").opacity(0.18), in: Circle())
-                    .overlay(Circle().strokeBorder(tokenColor("brand-ink").opacity(0.4)))
+                    .background(Color.dad("brand").opacity(0.18), in: Circle())
+                    .overlay(Circle().strokeBorder(Color.dad("brand-ink").opacity(0.4)))
             }
             .accessibilityLabel("Account and settings")
             .accessibilityAddTraits(.isButton)
@@ -132,10 +132,10 @@ struct DonorShell: View {
         if case .ready(let profile) = model.state, let dashboard = model.dashboardService {
             DonorHomeView(service: dashboard, giving: model.givingKit, events: model.eventsService,
                           engagement: model.engagementService, wallet: model.walletService,
-                          greeting: profile.publicName, preview: model.preview,
+                          greeting: profile.publicName,
                           onSwitchToGiving: { selectedTab = .giving },
                           onInvite: { selectedTab = .circle },
-                          destination: $destination, onSignedOut: onSignedOut)
+                          onSignedOut: onSignedOut)
         } else {
             accountState
         }
@@ -253,6 +253,6 @@ struct SettingsSheet: View {
                     Button("Done", action: onClose).accessibilityIdentifier("settings-close")
                 }
             }
-        }.tint(tokenColor("brand-ink"))
+        }.tint(Color.dad("brand-ink"))
     }
 }

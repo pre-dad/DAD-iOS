@@ -24,11 +24,9 @@ func launchValue(_ name: String) -> String? {
     #endif
 }
 
-func tokenColor(_ name: String) -> Color { Color.dad(name) }
-
 struct AppBackground: ViewModifier {
     @Environment(\.colorScheme) private var scheme
-    func body(content: Content) -> some View { content.background(tokenColor(scheme == .dark ? "ink-deep" : "paper")) }
+    func body(content: Content) -> some View { content.background(Color.dad(scheme == .dark ? "ink-deep" : "paper")) }
 }
 
 #if DEBUG
@@ -295,11 +293,13 @@ final class AccountModel {
     private nonisolated static func wipeAttribution(linkTokens key: String = "org.dad.link-tokens") {
         LegacyAttribution.clear()
         DefaultsLinkTokenStore(key: key).clear()
+        UserDefaults.standard.removeObject(forKey: DonorDefaults.lastSeenMilestone)
     }
     func load() async {
         guard let session else { state = .unavailable; return }
         generation += 1
         let current = generation
+        let prior = state
         state = .loading
         do {
             let profile = try await session.profile()
@@ -310,7 +310,7 @@ final class AccountModel {
                 if let linkAttribution { Task { await linkAttribution.bindCompany() } }
             }
         }
-        catch is CancellationError { return }
+        catch is CancellationError { if current == generation { state = prior } }
         catch AccountError.signedOut { if current == generation { state = .signedOut; registeredPush = nil } }
         catch { if current == generation { state = .unavailable } }
     }
@@ -326,9 +326,7 @@ final class AccountModel {
     func openNotification(_ tap: PushTap) {
         analytics?.emit(.pushOpened, properties: ["type": tap.category])
         guard let path = tap.path, let target = router?.notification(path: path) else { return }
-        let signedIn: Bool
-        if case .ready = state { signedIn = true } else { signedIn = false }
-        if let now = gate.receive(target, signedIn: signedIn) { destination = now }
+        if let now = gate.receive(target, signedIn: isReady) { destination = now }
     }
     /// A sign-in link pasted from the "check your email" screen (the email may have been opened on
     /// another device or in a browser). A claim link, including its supported return path, goes through the
@@ -355,9 +353,7 @@ final class AccountModel {
             }
         case .account(let target):
             if role == .partner { return url }
-            let signedIn: Bool
-            if case .ready = state { signedIn = true } else { signedIn = false }
-            if let now = gate.receive(target, signedIn: signedIn) { destination = now }
+            if let now = gate.receive(target, signedIn: isReady) { destination = now }
             Task { await load() }
             return nil
         case .referral(let code, let inPerson):
@@ -798,7 +794,7 @@ struct DADApp: App {
         } else {
             switch router.root {
             case .authenticated(.donor):
-                donorRoot   // unreachable: handled by `showsDonorShell`
+                EmptyView()   // `showsDonorShell` already took this case
             case .restoring:
                 // A session-less launch waits on a neutral progress view so it never flashes
                 // the signed-in screen (a restorable session is the donor shell above).
@@ -839,7 +835,7 @@ struct DADApp: App {
             }
             .modifier(AppBackground())
             .preferredColorScheme(launchFlag("--preview-dark") ? .dark : nil)
-            .tint(tokenColor("brand-ink"))
+            .tint(Color.dad("brand-ink"))
             .environment(model.analytics)
             .task {
                 model.analytics?.emit(.appOpened)
@@ -882,6 +878,7 @@ struct DADApp: App {
                 case .ready where router.currentRole == nil:
                     router.signedIn(as: .donor)   // a claim link signed the person in from the sign-in screen
                 case .signedOut where router.currentRole == .donor:
+                    UserDefaults.standard.removeObject(forKey: DonorDefaults.lastSeenMilestone)
                     router.signedOut()            // sign-out, deletion, or a revoked session
                 default: break
                 }
