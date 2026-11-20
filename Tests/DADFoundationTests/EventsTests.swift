@@ -115,12 +115,6 @@ final class InviteOnlyGatingTests: XCTestCase {
         XCTAssertTrue(event.isInviteOnly)
         XCTAssertEqual(event.typeLabel, "Invite-only")
     }
-
-    func testReservationStatusDecodesUnknownToNone() {
-        XCTAssertEqual(ReservationStatus(contract: "reserved"), .reserved)
-        XCTAssertEqual(ReservationStatus(contract: "checked_in"), .checkedIn)
-        XCTAssertEqual(ReservationStatus(contract: "some_future_value"), .none)
-    }
 }
 
 // MARK: - Check-in window (E-8), rejected outside window

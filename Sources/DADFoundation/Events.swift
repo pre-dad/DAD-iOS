@@ -8,8 +8,6 @@ import Foundation
 // exact window). These rules are the *client-side* pre-checks that drive what the UI
 // offers and disables.
 
-// MARK: - Reservation status (E-3, E-4)
-
 /// Where the signed-in donor stands on one event. Mirrors the contract's `reservation_status`
 /// string so the detail screen can render the right primary action without re-deriving it.
 public enum ReservationStatus: String, Sendable, Equatable, Codable {
@@ -17,15 +15,7 @@ public enum ReservationStatus: String, Sendable, Equatable, Codable {
     case reserved
     case waitlisted
     case checkedIn = "checked_in"
-
-    /// The contract sends unknown future values as strings; decode defensively to `.none`
-    /// rather than failing the whole event list.
-    public init(contract raw: String) {
-        self = ReservationStatus(rawValue: raw) ?? .none
-    }
 }
-
-// MARK: - Availability (E-2, E-3, E-4)
 
 /// What the detail screen's primary action should offer, derived from capacity, the donor's
 /// current standing, and the booking window. Keeping this a pure function of the event makes
@@ -48,8 +38,6 @@ public enum EventAvailability: Sendable, Equatable {
     /// Event cancelled by the organiser — no action.
     case cancelled
 }
-
-// MARK: - Event (the detail/list model, decoded from EventView)
 
 /// One event as the list and detail screens render it. Independent of the generated
 /// `EventView` so the domain + tests never import transport types; `WireAPI` maps across.
@@ -164,17 +152,11 @@ public struct DonorEvent: Sendable, Equatable, Identifiable {
     }
 }
 
-// MARK: - Check-in window (E-8)
-
 /// The client-side check-in gate. The server is authoritative, but the scanner should only
 /// *offer* check-in inside the window and give a clear reason when it is too early / too late,
 /// rather than firing a request that is bound to 422. The window opens at `startsAt` and closes
 /// at `endsAt`, matching the contract.
 public struct CheckInWindow: Sendable, Equatable {
-    /// How long before `startsAt` check-in opens. The contract accepts a check-in only between the
-    /// event's start and end (E-8), so there is no early grace; the server stays authoritative.
-    public static let earlyGrace: TimeInterval = 0
-
     public let startsAt: Date
     public let endsAt: Date
     /// The event's zone, used only to word "opens at ..." messages; nil falls back to the device zone.
@@ -186,7 +168,7 @@ public struct CheckInWindow: Sendable, Equatable {
         self.timeZone = timeZone
     }
 
-    public var opensAt: Date { startsAt.addingTimeInterval(-Self.earlyGrace) }
+    public var opensAt: Date { startsAt }
 
     public enum State: Sendable, Equatable {
         case tooEarly(opensAt: Date)
@@ -203,8 +185,6 @@ public struct CheckInWindow: Sendable, Equatable {
     /// Whether the scanner should allow a check-in attempt right now.
     public func isOpen(now: Date) -> Bool { state(now: now) == .open }
 }
-
-// MARK: - Reservation outcome (E-4)
 
 /// The result of a reserve attempt, from `ReservationResult.status`. Distinguishes a confirmed
 /// seat from a waitlist placement so the confirmation screen shows the right copy (E-4).
@@ -226,8 +206,6 @@ public enum ReservationOutcome: Sendable, Equatable {
             : "Your spot is confirmed. Add it to your calendar so you don’t miss it."
     }
 }
-
-// MARK: - Time display (E-3)
 
 /// Event times in the EVENT's time zone with the donor's locale (E-3), always with the zone abbreviation
 /// so a time is never ambiguous. An explicit `timeZone` wins; otherwise the event's `time_zone`; the
