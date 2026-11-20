@@ -219,6 +219,7 @@ public final class GivingModel {
         }
         syncSelection()
         hasLoaded = true
+        guard !Task.isCancelled else { return }
         notice = Self.outcome(finished.purpose, settled: settled, recurring: recurring, payment: payment)
     }
 
@@ -233,7 +234,7 @@ public final class GivingModel {
                 handoff = HostedHandoff(url: url, purpose: purpose)
             case .alreadyFinished(let state):
                 payment = state
-                notice = Self.outcome(.updatePayment, settled: true, recurring: recurring, payment: state)
+                notice = Self.outcome(purpose, settled: true, recurring: recurring, payment: state)
             case .applePay:
                 phase = .failed("Apple Pay isn’t available in this build yet.")
                 return
@@ -243,8 +244,8 @@ public final class GivingModel {
             if purpose == .startGift, case AccountError.conflict = error {
                 // A gift or an open checkout already exists (or the key was used for another amount): pull
                 // the server's truth in and say so.
-                await fail(error, rereadOnConflict: true)
-                phase = .failed("You already have a monthly gift or a checkout in progress. We’ve refreshed it; please review.")
+                await fail(error, rereadOnConflict: true,
+                           message: "You already have a monthly gift or a checkout in progress. We’ve refreshed it; please review.")
             } else if purpose == .startGift, case AccountError.paymentsUnavailable = error {
                 phase = .failed("Giving isn’t available right now. Please try again later.")
             } else {
@@ -282,7 +283,7 @@ public final class GivingModel {
         if let minor = currentAmountMinor, let amount = GiftAmount(monthlyMinor: minor) { selection = amount }
     }
 
-    private func fail(_ error: Error, rereadOnConflict: Bool = false) async {
+    private func fail(_ error: Error, rereadOnConflict: Bool = false, message: String? = nil) async {
         if error.isCancellation { phase = .idle; return }   // abandoned, not failed: prior state stands
         if case AccountError.signedOut = error { signedOut = true }
         if rereadOnConflict, case AccountError.conflict = error {
@@ -291,7 +292,7 @@ public final class GivingModel {
             await readSupporting()
             syncSelection()
         }
-        phase = .failed(error.userMessage)
+        phase = .failed(message ?? error.userMessage)
     }
 
     private static func outcome(_ purpose: HostedHandoff.Purpose, settled: Bool, recurring: RecurringState, payment: PaymentMethodState?) -> String {

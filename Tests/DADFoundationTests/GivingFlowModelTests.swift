@@ -354,6 +354,18 @@ final class GivingFlowModelTests: XCTestCase {
         XCTAssertEqual(m.selection.dailyDollars, 1)
     }
 
+    func testACancelledPollDoesNotClaimNoGiftWasFound() async {
+        let service = GivingDouble()
+        let m = model(service, attempts: 3)
+        await m.load()
+        await m.startGift()
+        let poll = Task { await m.handoffFinished() }
+        poll.cancel()
+        await poll.value
+        XCTAssertNil(m.notice)
+        XCTAssertFalse(m.isConfirming)
+    }
+
     func testStartGiftThatNeverAppearsStopsPollingAndSaysSo() async {
         let service = GivingDouble()
         let m = model(service, attempts: 3)

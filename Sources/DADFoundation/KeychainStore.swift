@@ -21,7 +21,8 @@ public struct KeychainStore: CredentialStore {
         let status = SecItemCopyMatching(q as CFDictionary, &result)
         if status == errSecItemNotFound { return nil }
         guard status == errSecSuccess, let data = result as? Data else { throw AccountError.secureStorage(status) }
-        return try JSONDecoder().decode(Credentials.self, from: data)
+        // An undecodable item is a storage fault, not a request failure; callers already handle secureStorage.
+        do { return try JSONDecoder().decode(Credentials.self, from: data) } catch { throw AccountError.secureStorage(errSecDecode) }
     }
     public func save(_ credentials: Credentials) throws {
         let data = try JSONEncoder().encode(credentials)
