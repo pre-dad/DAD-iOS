@@ -113,10 +113,10 @@ final class AnalyticsUploadTests: XCTestCase {
         XCTAssertNil(analytics.choice)
         analytics.choose(true)
         XCTAssertEqual(consent.choice, true)
-        for _ in 0..<200 where transport.calls(to: "/analytics/events").isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        await eventually { !transport.calls(to: "/analytics/events").isEmpty }
         XCTAssertEqual(transport.calls(to: "/analytics/events").count, 1)
         analytics.choose(false)
-        for _ in 0..<200 where await analytics.pending > 0 { try await Task.sleep(for: .milliseconds(10)) }
+        await eventually { await analytics.pending == 0 }
         let left = await analytics.pending
         XCTAssertEqual(left, 0)
         analytics.emit(.irlCodeShown)   // declined: dropped synchronously, nothing queued to send
@@ -132,7 +132,7 @@ final class AnalyticsUploadTests: XCTestCase {
         }
         let analytics = AnalyticsController(consent: MemoryAnalyticsConsent(choice: true), sink: FailingSink())
         analytics.emit(.roleSelected)
-        for _ in 0..<200 where await analytics.pending == 0 { try await Task.sleep(for: .milliseconds(10)) }
+        await eventually { await analytics.pending != 0 }
         for _ in 0..<50 {
             analytics.choose(false)
             analytics.choose(true)
@@ -170,12 +170,12 @@ final class AnalyticsUploadTests: XCTestCase {
         analytics.emit(.appOpened)
         await sink.entered.pass()
         for _ in 0..<200 { analytics.emit(.roleSelected) }
-        for _ in 0..<200 where await analytics.pending < 201 { try await Task.sleep(for: .milliseconds(10)) }
+        await eventually { await analytics.pending >= 201 }
         let queued = await analytics.pending
         XCTAssertEqual(queued, 201)
         analytics.choose(false)
         await sink.release.release()
-        for _ in 0..<200 where await analytics.pending > 0 { try await Task.sleep(for: .milliseconds(10)) }
+        await eventually { await analytics.pending == 0 }
         try await analytics.flush()
         let remaining = await analytics.pending
         let calls = await sink.calls

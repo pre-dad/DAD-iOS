@@ -52,6 +52,16 @@ func waitUntil(timeout: Duration = .seconds(5), file: StaticString = #filePath, 
     }
 }
 
+/// Polls an async condition every 10 ms and fails the test if it does not hold within `timeout`.
+@MainActor func eventually(timeout: Duration = .seconds(5), file: StaticString = #filePath, line: UInt = #line,
+                _ condition: @MainActor () async -> Bool) async {
+    let deadline = ContinuousClock.now + timeout
+    while await !condition() {
+        if ContinuousClock.now >= deadline { XCTFail("condition not met within \(timeout)", file: file, line: line); return }
+        try? await Task.sleep(for: .milliseconds(10))
+    }
+}
+
 /// Latch the test opens to release a gated transport/call; also signals when the call arrived.
 actor Gate {
     private var open = false

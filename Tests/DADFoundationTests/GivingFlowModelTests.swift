@@ -297,7 +297,7 @@ final class GivingFlowModelTests: XCTestCase {
         await m.load()
         await m.cancel()
         XCTAssertTrue(m.recurring.isEnding, "billing already shows the gift ending")
-        guard case .failed = m.phase else { return XCTFail() }
+        guard case .failed = m.phase else { return XCTFail("expected the failed phase") }
     }
 
     func testCancelCancellationKeepsStateAndDoubleTapSendsOnce() async {
@@ -498,7 +498,7 @@ final class GivingFlowModelTests: XCTestCase {
         await a.load()
         await a.updatePayment()
         XCTAssertEqual(none.beginPaymentScript.count, 0)
-        guard case .failed = a.phase else { return XCTFail() }
+        guard case .failed = a.phase else { return XCTFail("expected the failed phase") }
 
         for error in [AccountError.conflict, .forbidden, .rateLimited, .unavailable, .paymentsUnavailable] {
             let service = GivingDouble()

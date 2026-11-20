@@ -89,19 +89,19 @@ final class WirePartnerApplicationTests: XCTestCase {
             XCTAssertNotNil(try receipts.load(), "the server may not have seen it, and a retry must reuse the receipt")
         }
         let wire = WirePartnerApplication(origin: testOrigin, transport: HeaderTransport { _ in (.tooManyRequests, HTTPFields(), "{}") }, receipt: store())
-        do { try await wire.submit(attempt()); XCTFail() }
+        do { try await wire.submit(attempt()); XCTFail("expected the call to throw") }
         catch let error as ApplicationSubmitError { XCTAssertEqual(error, .rateLimited(retryAfter: nil), "a missing header is not guessed") }
     }
 
     func testOutagesAndLostConnectionsKeepTheReceipt() async throws {
         let receipts = store()
         let down = WirePartnerApplication(origin: testOrigin, transport: HeaderTransport { _ in (.serviceUnavailable, HTTPFields(), #"{"detail":"x"}"#) }, receipt: receipts)
-        do { try await down.submit(attempt()); XCTFail() }
+        do { try await down.submit(attempt()); XCTFail("expected the call to throw") }
         catch let error as ApplicationSubmitError { XCTAssertEqual(error, .unavailable) }
         XCTAssertNotNil(try receipts.load())
 
         let offline = WirePartnerApplication(origin: testOrigin, transport: HeaderTransport { _ in throw URLError(.notConnectedToInternet) }, receipt: receipts)
-        do { try await offline.submit(attempt()); XCTFail() }
+        do { try await offline.submit(attempt()); XCTFail("expected the call to throw") }
         catch { XCTAssertFalse(error is ApplicationSubmitError) }
         XCTAssertNotNil(try receipts.load())
     }
@@ -125,13 +125,13 @@ final class WirePartnerApplicationTests: XCTestCase {
 
     func testStubScenariosAnswerLikeTheServer() async throws {
         let invalid = try StubBackend.make(applicationSubmit: .invalid)
-        do { try await invalid.applicationSubmit.submit(.make(sample)); XCTFail() }
+        do { try await invalid.applicationSubmit.submit(.make(sample)); XCTFail("expected the call to throw") }
         catch let error as ApplicationSubmitError { XCTAssertEqual(error, .invalid) }
         let none = try await invalid.applicationStatus.status()
         XCTAssertNil(none)
 
         let throttled = try StubBackend.make(applicationSubmit: .throttled)
-        do { try await throttled.applicationSubmit.submit(.make(sample)); XCTFail() }
+        do { try await throttled.applicationSubmit.submit(.make(sample)); XCTFail("expected the call to throw") }
         catch let error as ApplicationSubmitError { XCTAssertEqual(error, .rateLimited(retryAfter: 30)) }
     }
 }
@@ -207,7 +207,7 @@ final class PartnerApplicationModelTests: XCTestCase {
         service.results = [.failure(ApplicationSubmitError.unavailable), .failure(URLError(.timedOut)), .success(())]
         let m = model(service)
         await m.submit()
-        guard case .failed(let message) = m.phase else { return XCTFail() }
+        guard case .failed(let message) = m.phase else { return XCTFail("expected the call to throw") }
         XCTAssertTrue(message.contains("retry"))
         XCTAssertTrue(m.isLocked)
         m.organization = "Changed after the fact"
@@ -225,11 +225,11 @@ final class PartnerApplicationModelTests: XCTestCase {
         service.results = [.failure(ApplicationSubmitError.invalid), .failure(ApplicationSubmitError.conflict), .success(())]
         let m = model(service)
         await m.submit()
-        guard case .failed(let invalid) = m.phase else { return XCTFail() }
+        guard case .failed(let invalid) = m.phase else { return XCTFail("expected the call to throw") }
         XCTAssertTrue(invalid.contains("Check each field"))
         XCTAssertFalse(m.isLocked)
         await m.submit()
-        guard case .failed = m.phase else { return XCTFail() }
+        guard case .failed = m.phase else { return XCTFail("expected the call to throw") }
         XCTAssertFalse(m.isLocked)
         await m.submit()
         XCTAssertEqual(m.phase, .submitted)
@@ -257,7 +257,7 @@ final class PartnerApplicationModelTests: XCTestCase {
         service.results = [.failure(ApplicationSubmitError.forbidden), .failure(CancellationError())]
         let m = model(service)
         await m.submit()
-        guard case .failed(let message) = m.phase else { return XCTFail() }
+        guard case .failed(let message) = m.phase else { return XCTFail("expected the call to throw") }
         XCTAssertTrue(message.contains("website"))
         XCTAssertFalse(m.isLocked)
         await m.submit()

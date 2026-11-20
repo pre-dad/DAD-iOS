@@ -6,7 +6,7 @@ import XCTest
 
 final class RankLabelTests: XCTestCase {
     /// `national_percentile` is already the *top* bucket (the server's NAT2 badge is "top 2%"), so the label
-    /// is that number as is. The previous `100 - p` rendered a top-2% donor as "Top 98%".
+    /// is that number as is.
     func testTheServersTopBucketIsShownAsIs() {
         for (bucket, label) in [(1, "Top 1% nationally"), (2, "Top 2% nationally"), (50, "Top 50% nationally"), (98, "Top 98% nationally")] {
             XCTAssertEqual(RankingStanding(nationalPercentile: bucket, city: nil, cityRank: nil).nationalLabel, label, "bucket \(bucket)")

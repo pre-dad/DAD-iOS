@@ -214,6 +214,7 @@ final class AccountSettingsModelTests: XCTestCase {
         await model.deleteAccount(DeleteAccountGate(typed: "nope"))
         XCTAssertFalse(svc.deleted)
         XCTAssertFalse(model.signedOut)
+        XCTAssertEqual(model.actionError, "Type DELETE to confirm.")
         // Confirmed: deletes then wipes.
         await model.deleteAccount(DeleteAccountGate(typed: "DELETE"))
         XCTAssertTrue(svc.deleted)
@@ -250,7 +251,7 @@ final class AccountSettingsModelTests: XCTestCase {
         XCTAssertFalse(svc.deleted)
         XCTAssertFalse(svc.didSignOut, "a failed delete must not log the donor out of an intact account")
         XCTAssertFalse(model.signedOut)
-        XCTAssertNotNil(model.actionError)
+        XCTAssertEqual(model.actionError, "Something went wrong. Please try again.")
         XCTAssertFalse(model.isBusy)
     }
 
