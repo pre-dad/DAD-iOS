@@ -74,6 +74,8 @@ final class AccountSettingsModelTests: XCTestCase {
     private final class FakeService: AccountSettingsService, @unchecked Sendable {
         var failLoad = false
         var failSave = false
+        var cancelSave = false
+        var signedOutOnSave = false
         var failDelete = false
         var blockDelete = false
         var failSignOut = false
@@ -97,6 +99,8 @@ final class AccountSettingsModelTests: XCTestCase {
         }
         func savePreferences(_ preferences: AccountPreferences) async throws -> AccountSettingsSnapshot {
             if failSave { throw AccountError.unavailable }
+            if cancelSave { throw CancellationError() }
+            if signedOutOnSave { throw AccountError.signedOut }
             lastSaved = preferences
             prefs = AccountPreferences(
                 version: preferences.version + 1, referralEmails: preferences.referralEmails,
@@ -125,6 +129,20 @@ final class AccountSettingsModelTests: XCTestCase {
         await model.load()
         XCTAssertEqual(model.phase, .ready)
         XCTAssertEqual(model.snapshot?.profile.zip, "78701")
+    }
+
+    func testACancelledSaveShowsNoErrorAndASignedOutSaveEndsTheSession() async {
+        let service = FakeService()
+        let model = AccountSettingsModel(service: service)
+        await model.load()
+        service.cancelSave = true
+        await model.toggle("marketing_emails", true)
+        XCTAssertNil(model.actionError, "cancellation is not an error")
+        XCTAssertFalse(model.signedOut)
+        service.cancelSave = false
+        service.signedOutOnSave = true
+        await model.toggle("marketing_emails", true)
+        XCTAssertTrue(model.signedOut)
     }
 
     func testLoadFailureSurfacesFailed() async {

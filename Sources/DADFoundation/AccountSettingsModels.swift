@@ -2,7 +2,7 @@ import Foundation
 
 // Settings view model + service seam. The model owns load/ready/failed state, toggle-and-save
 // (optimistic version bump), and the delete-account flow (confirm gate -> server delete -> local
-// wipe), so it is unit-tested without a network or UI — the iOS counterpart of Android Phase 7.
+// wipe), so it is unit-tested without a network or UI.
 
 public struct AccountSettingsSnapshot: Sendable, Equatable {
     public let profile: AccountProfileSummary
@@ -50,14 +50,22 @@ public final class AccountSettingsModel {
 
     public init(service: any AccountSettingsService) { self.service = service }
 
+    /// The message to show for a failed call, or nil when the call was only cancelled. A signed-out
+    /// failure also ends the session on screen.
+    private func message(for error: Error) -> String? {
+        if error.isCancellation { return nil }
+        if error as? AccountError == .signedOut { signedOut = true }
+        return error.userMessage
+    }
+
     public func load() async {
         phase = .loading
         do {
             snapshot = try await service.load()
             phase = .ready
         } catch {
-            if error as? AccountError == .signedOut { signedOut = true }
-            phase = .failed(error.userMessage)
+            guard let message = message(for: error) else { return }
+            phase = .failed(message)
         }
     }
 
@@ -105,14 +113,13 @@ public final class AccountSettingsModel {
                 snapshot = try await service.load()
                 actionError = "Your settings changed elsewhere. We’ve refreshed them; review your choices and try again."
             } catch {
-                if error as? AccountError == .signedOut { signedOut = true }
-                phase = .failed(error.userMessage)
+                guard let message = message(for: error) else { return false }
+                phase = .failed(message)
                 actionError = "Your settings changed elsewhere, but couldn’t be refreshed. Please try again."
             }
             return false
         } catch {
-            if error as? AccountError == .signedOut { signedOut = true }
-            actionError = error.userMessage
+            actionError = message(for: error)
             return false
         }
     }
@@ -131,9 +138,8 @@ public final class AccountSettingsModel {
         do {
             try await service.deleteAccount()
         } catch {
-            if error as? AccountError == .signedOut { signedOut = true }
             if case AccountError.deletionBlocked = error { deletionBlocked = true }
-            actionError = error.userMessage
+            actionError = message(for: error)
             return
         }
         // The account is gone server-side, so the donor must leave the shell even if the remote
@@ -151,7 +157,7 @@ public final class AccountSettingsModel {
             try await service.signOut()
             signedOut = true
         } catch {
-            actionError = error.userMessage
+            actionError = message(for: error)
         }
     }
 }

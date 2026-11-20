@@ -216,6 +216,8 @@ public final class DeviceSessionsModel {
             phase = .ready
         } catch where error.isCancellation {
             return
+        } catch AccountError.signedOut {
+            signedOut = true
         } catch {
             phase = .failed("Your signed-in devices couldn’t be loaded right now. Please try again in a moment.")
         }
@@ -263,6 +265,8 @@ public final class EmployerModel {
     public var teamName = ""
     public private(set) var isBusy = false
     public private(set) var actionError: String?
+    /// True once the server reports the session ended, so the screen leaves the signed-in shell.
+    public private(set) var signedOut = false
     private let service: any AccountManagementService
 
     public init(service: any AccountManagementService) { self.service = service }
@@ -277,6 +281,7 @@ public final class EmployerModel {
         phase = .loading
         do { phase = .ready(try await service.employer()) }
         catch where error.isCancellation { return }
+        catch AccountError.signedOut { signedOut = true }
         catch { phase = .failed("Your employer details couldn’t be loaded right now. Please try again in a moment.") }
     }
 
@@ -309,6 +314,8 @@ public final class EmployerModel {
             phase = .ready(try await service.employer())
         } catch where error.isCancellation {
             return
+        } catch AccountError.signedOut {
+            signedOut = true
         } catch AccountError.invalidInput {
             actionError = invalid
         } catch AccountError.conflict where conflict != nil {

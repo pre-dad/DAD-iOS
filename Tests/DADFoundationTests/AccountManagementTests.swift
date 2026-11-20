@@ -208,6 +208,18 @@ private actor FakeManagement: AccountManagementService {
         await model.enroll()
         XCTAssertEqual(model.actionError, "Your account is already linked to another employer.")
     }
+
+    func testAnEndedSessionLeavesTheShellFromEveryLoad() async {
+        let service = FakeManagement()
+        await service.fail(.signedOut)
+        let employer = EmployerModel(service: service)
+        await employer.load()
+        XCTAssertTrue(employer.signedOut)
+        let sessions = DeviceSessionsModel(service: service)
+        await sessions.load()
+        XCTAssertTrue(sessions.signedOut)
+        XCTAssertEqual(sessions.phase, .loading, "the screen leaves instead of showing a retry")
+    }
 }
 
 final class WireAccountManagementTests: XCTestCase {
