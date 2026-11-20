@@ -17,8 +17,8 @@ import XCTest
 
     func testContactDetailsSaveANormalizedPhone() {
         let app = openSettings()
-        XCTAssertFalse(app.buttons["details-save"].waitForExistence(timeout: 10) && app.buttons["details-save"].isEnabled,
-                       "nothing changed yet")
+        XCTAssertTrue(app.buttons["details-save"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["details-save"].isEnabled, "nothing changed yet")
         app.textFields["details-phone"].replaceText(with: "415555012", in: app)
         XCTAssertTrue(app.staticTexts["details-phone-hint"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["details-save"].isEnabled)
@@ -49,8 +49,7 @@ import XCTest
         app.buttons["employer-enroll"].tap()
         XCTAssertTrue(app.staticTexts["employer-linked"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.staticTexts["employer-error"].exists)
-        XCTAssertTrue(app.otherElements["leaderboard-55555555-5555-4555-8555-555555555555"].exists
-                      || app.staticTexts["leaderboard-55555555-5555-4555-8555-555555555555"].exists)
+        XCTAssertTrue(app.staticTexts["leaderboard-55555555-5555-4555-8555-555555555555"].waitForExistence(timeout: 10))
         app.textFields["employer-team-name"].replaceText(with: "Platform", in: app)
         app.buttons["employer-join-team"].tap()
         XCTAssertTrue(app.staticTexts["employer-team"].waitForExistence(timeout: 10))
@@ -65,9 +64,8 @@ import XCTest
         XCTAssertTrue(app.staticTexts["You’re not signed in anywhere else."].waitForExistence(timeout: 10))
         XCTAssertFalse(other.exists)
         app.buttons["sessions-sign-out-everywhere"].tap()
-        XCTAssertTrue(app.buttons["Give $1 a day"].waitForExistence(timeout: 15)
-                      || app.otherElements["sign-in-methods"].waitForExistence(timeout: 5),
-                      "ending every session must leave the donor shell")
+        XCTAssertTrue(app.buttons["Give $1 a day"].waitForExistence(timeout: 15),
+                      "ending every session must return to the welcome screen")
         XCTAssertFalse(app.buttons["open-settings"].exists)
     }
 }
