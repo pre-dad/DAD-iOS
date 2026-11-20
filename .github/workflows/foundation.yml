@@ -63,9 +63,9 @@ jobs:
     # `xcode-27` is GitHub's hosted macOS image carrying Xcode 27 and the iOS 27 simulator runtime
     # (the README toolchain floor); macos-latest/macos-26 stop at Xcode 26.
     runs-on: xcode-27
-    # Hosted macOS runs cold (no warm build caches): the full job takes about 47 minutes there,
-    # most of it the UI test suite, against well under 25 on a warm local Mac.
-    timeout-minutes: 75
+    # Hosted macOS runs cold (no warm build caches): the full job has taken up to 74 minutes
+    # there, most of it the UI test suite, against well under 25 on a warm local Mac.
+    timeout-minutes: 100
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
