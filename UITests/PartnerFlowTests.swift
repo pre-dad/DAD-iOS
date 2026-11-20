@@ -236,7 +236,7 @@ import XCTest
         let approved = XCUIApplication()
         approved.launchArguments = ["--stub-backend", "--stub-application-approved"]
         approved.launchInForeground()
-        approved.buttons["Partner organization? Sign in here"].tap()
+        approved.buttons["Partner organization? Sign in here"].tapWhenReady()
         XCTAssertTrue(approved.staticTexts["partner-application-message"].waitForExistence(timeout: 5))
         XCTAssertTrue(approved.staticTexts["partner-application-message"].label.contains("is approved"))
         approved.terminate()
@@ -244,9 +244,9 @@ import XCTest
         let unknown = XCUIApplication()
         unknown.launchArguments = ["--stub-backend", "--stub-application-unknown"]
         unknown.launchInForeground()
-        unknown.buttons["Partner organization? Sign in here"].tap()
+        unknown.buttons["Partner organization? Sign in here"].tapWhenReady()
         XCTAssertTrue(unknown.staticTexts["partner-application-message"].waitForExistence(timeout: 5))
-        XCTAssertFalse(unknown.staticTexts["partner-application-message"].label.contains("approved"))
+        XCTAssertTrue(unknown.staticTexts["partner-application-message"].label.hasPrefix("We’re updating the status of your application for"))
     }
 
     func testNoApplicationCardWithoutAReceipt() {

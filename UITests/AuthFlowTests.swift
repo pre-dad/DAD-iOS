@@ -9,12 +9,10 @@ import XCTest
         app.launchInForeground()
 
         // Welcome is the unauthenticated entry point; its sign-in path reaches the methods.
-        XCTAssertTrue(app.buttons["I already give — sign in"].waitForExistence(timeout: 10))
-        app.buttons["I already give — sign in"].tap()
+        app.buttons["I already give — sign in"].tapWhenReady()
 
         // Sign-in method picker: phone is the primary, labelled "Continue with phone".
-        XCTAssertTrue(app.buttons["Continue with phone"].waitForExistence(timeout: 10))
-        app.buttons["Continue with phone"].tap()
+        app.buttons["Continue with phone"].tapWhenReady()
 
         // Phone + SMS code screen renders with its phone field.
         XCTAssertTrue(app.staticTexts["Sign in with your phone"].waitForExistence(timeout: 10))
@@ -29,9 +27,8 @@ import XCTest
         app.launchArguments = ["--preview-signed-out"]
         app.launchInForeground()
 
-        app.buttons["I already give — sign in"].tap()
-        XCTAssertTrue(app.buttons["Continue with phone"].waitForExistence(timeout: 10))
-        app.buttons["Continue with phone"].tap()
+        app.buttons["I already give — sign in"].tapWhenReady()
+        app.buttons["Continue with phone"].tapWhenReady()
 
         let phone = app.textFields["Phone number"]
         XCTAssertTrue(phone.waitForExistence(timeout: 5))
@@ -56,7 +53,7 @@ import XCTest
         app.launchArguments = ["--preview-signed-out"]
         app.launchInForeground()
 
-        app.buttons["I already give — sign in"].tap()
+        app.buttons["I already give — sign in"].tapWhenReady()
         XCTAssertTrue(app.buttons["Continue with phone"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["Continue with phone"].isEnabled)
         XCTAssertFalse(app.buttons["Sign in with Apple"].exists, "unavailable methods are not listed")

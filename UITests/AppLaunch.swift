@@ -16,3 +16,12 @@ extension XCUIApplication {
             file: file, line: line)
     }
 }
+
+extension XCUIElement {
+    /// Waits for the element to exist, then taps it, so the first tap on a freshly presented screen
+    /// fails with a named assertion instead of racing the render.
+    func tapWhenReady(timeout: TimeInterval = 10, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertTrue(waitForExistence(timeout: timeout), "\(self) did not appear", file: file, line: line)
+        tap()
+    }
+}
