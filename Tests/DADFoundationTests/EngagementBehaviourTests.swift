@@ -126,7 +126,7 @@ private func snap(ranking: RankingStanding? = ranked, referral: ReferralInfo? = 
 }
 
 @MainActor
-final class EngagementModelP5Tests: XCTestCase {
+final class EngagementModelTests: XCTestCase {
     func testSectionsTheServerDidNotGiveStayNilOnTheSnapshot() async {
         let model = EngagementModel(service: ScriptedEngagement(snapshots: [.success(snap(ranking: nil, referral: nil, badges: nil))]))
         await model.load()
@@ -135,6 +135,34 @@ final class EngagementModelP5Tests: XCTestCase {
         XCTAssertNil(model.displayedRanking)
         XCTAssertNil(model.snapshot?.badges)
         XCTAssertNil(model.snapshot?.referral)
+    }
+
+    func testLoadReadyExposesBadgesAndTheNationalLabel() async {
+        let badges = BadgeCollection(badges: [Badge(code: "F", title: "Founding", rule: "", perk: "", earned: true)])
+        let ranking = RankingStanding(nationalPercentile: 90, city: "Austin", cityRank: 5)
+        let model = EngagementModel(service: ScriptedEngagement(snapshots: [.success(snap(ranking: ranking, badges: badges))]))
+        await model.load()
+        XCTAssertEqual(model.phase, .ready)
+        XCTAssertEqual(model.snapshot?.badges?.earnedCount, 1)
+        XCTAssertEqual(model.snapshot?.ranking?.nationalLabel, "Top 90% nationally")
+    }
+
+    func testACancelledToggleIsNotAFailure() async {
+        let model = EngagementModel(service: ScriptedEngagement(snapshots: [.success(snap())], toggle: .failure(CancellationError())))
+        await model.load()
+        await model.setRankingOptIn(false)
+        XCTAssertEqual(model.phase, .ready)
+        XCTAssertNil(model.actionError)
+    }
+
+    func testACancelledFirstLoadIsNeitherReadyNorFailed() async {
+        for cancellation in [URLError(.cancelled) as Error, CancellationError()] {
+            let model = EngagementModel(service: ScriptedEngagement(snapshots: [.failure(cancellation)]))
+            await model.load()
+            XCTAssertEqual(model.phase, .loading, "abandoned work leaves the screen where it was")
+            XCTAssertNil(model.snapshot)
+            XCTAssertNil(model.refreshNotice)
+        }
     }
 
     func testAToggleShowsTheChoiceAtOnceThenConfirmsIt() async {
