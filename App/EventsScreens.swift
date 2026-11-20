@@ -45,7 +45,7 @@ struct EventsScreen: View {
         }
         .onChange(of: model.signedOut) { _, signedOut in if signedOut { onSignedOut() } }
         // Success haptic when a seat is reserved / waitlisted.
-        .sensoryFeedback(.success, trigger: model.lastOutcome)
+        .sensoryFeedback(.success, trigger: model.lastOutcome) { _, outcome in outcome != nil }
         .sheet(item: calendarBinding) { file in
             ShareSheet(url: file.url, onDone: { model.clearCalendar() }).ignoresSafeArea()
         }

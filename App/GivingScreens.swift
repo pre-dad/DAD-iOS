@@ -132,7 +132,7 @@ struct GiftScreen: View {
         }
         // Success haptic the moment a gift is set up or saved; warning when payment needs
         // attention. Triggers are published model state, so no number is animated.
-        .sensoryFeedback(.success, trigger: model.recurring.subscriptionID)
+        .sensoryFeedback(.success, trigger: model.giftsSaved)
         .sensoryFeedback(.warning, trigger: paymentNeedsAttention)
         // One-time celebration after a FIRST gift completes (not an amount change).
         .onChange(of: model.recurring.subscriptionID) { previous, current in
@@ -244,16 +244,17 @@ struct GiftScreen: View {
         }
     }
 
+    @State private var otherExpanded = false
+    private static let presets = [1, 3, 5]
+
     /// The $1 / $3 / $5 / Other amount picker. The three presets are a radio row (the selected option
     /// carries `.isSelected` for VoiceOver); "Other" reveals a ± stepper for any $1–$30/day.
-    @State private var otherExpanded = false
-
     private var amountCard: some View {
         DADCard {
             VStack(alignment: .leading, spacing: 16) {
                 LazyVGrid(columns: typeSize.isAccessibilitySize ? [GridItem(.flexible())]
                           : [GridItem(.adaptive(minimum: 120), spacing: 8)], spacing: 8) {
-                    ForEach([1, 3, 5], id: \.self) { dollars in
+                    ForEach(Self.presets, id: \.self) { dollars in
                         amountChip(dollars)
                     }
                     otherChip
@@ -274,9 +275,9 @@ struct GiftScreen: View {
     }
 
     /// Whether the ± stepper is shown: when "Other" is chosen, or the current amount isn't a preset.
-    private var showsStepper: Bool { otherExpanded || ![1, 3, 5].contains(model.selection.dailyDollars) }
+    private var showsStepper: Bool { otherExpanded || !Self.presets.contains(model.selection.dailyDollars) }
 
-    /// A preset radio chip. Selection is shown with a checkmark + bolder fill (not colour alone) and
+    /// A preset radio chip. Selection is shown with a filled radio icon and a bolder fill (not colour alone) plus
     /// the `.isSelected` VoiceOver trait; never `.primary`, so the Start/Save button stays the lone CTA.
     private func amountChip(_ dollars: Int) -> some View {
         let selected = !showsStepper && model.selection.dailyDollars == dollars

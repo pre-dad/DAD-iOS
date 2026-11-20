@@ -410,3 +410,13 @@ public final class PartnerSignInModel {
 
     public func edit() { phase = .editing }
 }
+
+/// Volunteered time for display: minutes under an hour, otherwise hours to one decimal, so a 59-minute
+/// total never reads as "0 hours".
+public enum VolunteerTime {
+    public static func label(minutes: Int64) -> String {
+        if minutes < 60 { return minutes == 1 ? "1 minute" : "\(minutes) minutes" }
+        let hours = (Double(minutes) / 60).formatted(.number.precision(.fractionLength(0...1)).locale(Locale(identifier: "en_US")))
+        return hours == "1" ? "1 hour" : "\(hours) hours"
+    }
+}

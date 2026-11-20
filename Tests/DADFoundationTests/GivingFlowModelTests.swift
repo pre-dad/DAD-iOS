@@ -173,6 +173,16 @@ final class GivingFlowModelTests: XCTestCase {
         XCTAssertEqual(m.phase, .idle)
         XCTAssertEqual(m.notice, "Saved. Your next renewal will be $300.")
         XCTAssertEqual(service.changeScript.count, 1)
+        XCTAssertEqual(m.giftsSaved, 1)
+    }
+
+    func testLoadingAnExistingGiftIsNotASave() async {
+        let service = GivingDouble()
+        service.recurringScript = Script(active())
+        service.offerScript = Script(offer())
+        let m = model(service)
+        await m.load()
+        XCTAssertEqual(m.giftsSaved, 0, "opening the tab on a gift must not fire the success haptic")
     }
 
     func testApplyingTheAmountAlreadyInForceSendsNothing() async {
@@ -350,6 +360,7 @@ final class GivingFlowModelTests: XCTestCase {
         XCTAssertNil(m.handoff)
         XCTAssertFalse(m.isConfirming)
         XCTAssertEqual(m.recurring.subscriptionID, "sub")
+        XCTAssertEqual(m.giftsSaved, 1)
         XCTAssertEqual(m.notice, "Your gift is set up.")
         XCTAssertEqual(m.selection.dailyDollars, 1)
     }

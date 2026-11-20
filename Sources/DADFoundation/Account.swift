@@ -116,11 +116,16 @@ public struct AccountPreferences: Sendable, Equatable {
         Field("marketing_emails", "Marketing emails", \.marketingEmails),
     ]
 
+    /// Keys for the privacy and volunteering flags the settings screen shows outside the push and email rows.
+    public static let rankingsOptedOutKey = "rankings_opted_out"
+    public static let networkVisibleKey = "network_visible"
+    public static let volunteerKey = "volunteer"
+
     /// Toggles flipped by key that the settings screen does not list as push or email rows.
     private static let otherFields: [Field] = [
-        Field("rankings_opted_out", nil, \.rankingsOptedOut),
-        Field("network_visible", nil, \.networkVisible),
-        Field("volunteer", nil, \.volunteer),
+        Field(rankingsOptedOutKey, nil, \.rankingsOptedOut),
+        Field(networkVisibleKey, nil, \.networkVisible),
+        Field(volunteerKey, nil, \.volunteer),
     ]
 
     /// The push category toggles (§6.11), in display order. Payment-failure email is absent

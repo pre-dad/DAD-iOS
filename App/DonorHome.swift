@@ -386,7 +386,6 @@ private struct InitiativeCard: View {
 struct GiftHistoryScreen: View {
     @State private var model: GiftHistoryModel
     let onSignedOut: () -> Void
-    @Environment(\.colorScheme) private var scheme
 
     init(service: any DashboardService, onSignedOut: @escaping () -> Void) {
         self.onSignedOut = onSignedOut
@@ -498,7 +497,7 @@ struct GiftHistoryScreen: View {
                 }
             }
             .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-            .background(scheme == .dark ? Color.dad("ink") : Color.dad("line").opacity(0.35), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .dadPanel()
             .accessibilityElement(children: .contain).accessibilityIdentifier("receipt-detail")
         case nil:
             EmptyView()

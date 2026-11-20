@@ -12,6 +12,7 @@ struct SystemCameraPermission: CameraPermission {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized: return .allowed
         case .notDetermined: return .notRequested
+        case .restricted: return .restricted
         default: return .denied
         }
     }
@@ -27,6 +28,7 @@ struct QRScanSheet: View {
     let onClose: () -> Void
     var permission: any CameraPermission = SystemCameraPermission()
     @State private var state: PermissionState?
+    @State private var setupFailed = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -36,13 +38,23 @@ struct QRScanSheet: View {
             case nil:
                 ProgressView()
             case .allowed?:
-                QRScannerView(onCode: onCode)
+                QRScannerView(onCode: onCode, onSetupFailure: { setupFailed = true })
                     .frame(minHeight: 280).clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .accessibilityLabel("Camera view. Point it at the QR code shown at the venue.")
                     .accessibilityIdentifier("scan-camera")
+                if setupFailed {
+                    Text("The camera couldn’t be started. Close this and type the code instead.")
+                        .foregroundStyle(Color.dad("fail")).accessibilityIdentifier("scan-setup-failed")
+                }
             case .denied?:
                 Text("Camera access is off for DAD. You can turn it on in Settings, or close this and type the code instead.")
                     .accessibilityIdentifier("scan-denied")
+                if let settings = URL(string: UIApplication.openSettingsURLString) {
+                    Link("Open Settings", destination: settings).accessibilityIdentifier("scan-open-settings")
+                }
+            case .restricted?:
+                Text("Camera access is restricted on this device, so DAD can’t ask for it. Close this and type the code instead.")
+                    .accessibilityIdentifier("scan-restricted")
             case .unavailable?:
                 Text("This device has no camera available. Close this and type the code instead.")
                     .accessibilityIdentifier("scan-unavailable")
@@ -61,7 +73,8 @@ struct QRScanSheet: View {
 
 struct QRScannerView: UIViewControllerRepresentable {
     let onCode: (String) -> Void
-    func makeUIViewController(context: Context) -> ScannerController { ScannerController(onCode: onCode) }
+    let onSetupFailure: () -> Void
+    func makeUIViewController(context: Context) -> ScannerController { ScannerController(onCode: onCode, onSetupFailure: onSetupFailure) }
     func updateUIViewController(_ controller: ScannerController, context: Context) {}
 }
 
@@ -69,11 +82,13 @@ final class ScannerController: UIViewController, AVCaptureMetadataOutputObjectsD
     private let session = AVCaptureSession()
     private let queue = DispatchQueue(label: "org.dad.qr-scanner")
     private let onCode: (String) -> Void
+    private let onSetupFailure: () -> Void
     private var preview: AVCaptureVideoPreviewLayer?
     private var delivered = false
 
-    init(onCode: @escaping (String) -> Void) {
+    init(onCode: @escaping (String) -> Void, onSetupFailure: @escaping () -> Void) {
         self.onCode = onCode
+        self.onSetupFailure = onSetupFailure
         super.init(nibName: nil, bundle: nil)
     }
     required init?(coder: NSCoder) { nil }
@@ -81,10 +96,10 @@ final class ScannerController: UIViewController, AVCaptureMetadataOutputObjectsD
     override func viewDidLoad() {
         super.viewDidLoad()
         guard let device = AVCaptureDevice.default(for: .video), let input = try? AVCaptureDeviceInput(device: device),
-              session.canAddInput(input) else { return }
+              session.canAddInput(input) else { return onSetupFailure() }
         session.addInput(input)
         let output = AVCaptureMetadataOutput()
-        guard session.canAddOutput(output) else { return }
+        guard session.canAddOutput(output) else { return onSetupFailure() }
         session.addOutput(output)
         output.setMetadataObjectsDelegate(self, queue: .main)
         output.metadataObjectTypes = [.qr]

@@ -81,13 +81,7 @@ struct AccountSettingsScreen: View {
         // Notifications (§6.11) — payment-failure email is absent by design.
         section("Notifications") {
             NotificationPermissionRow()
-            ForEach(snapshot.preferences.pushToggles, id: \.key) { toggle in
-                Toggle(toggle.label, isOn: Binding(
-                    get: { toggle.value },
-                    set: { newValue in Task { await model.toggle(toggle.key, newValue) } }
-                )).disabled(model.isBusy).accessibilityIdentifier("pref-\(toggle.key)")
-            }
-            ForEach(snapshot.preferences.emailToggles, id: \.key) { toggle in
+            ForEach(snapshot.preferences.pushToggles + snapshot.preferences.emailToggles, id: \.key) { toggle in
                 Toggle(toggle.label, isOn: Binding(
                     get: { toggle.value },
                     set: { newValue in Task { await model.toggle(toggle.key, newValue) } }
@@ -99,15 +93,15 @@ struct AccountSettingsScreen: View {
         section("Privacy") {
             Toggle("Show my ranking", isOn: Binding(
                 get: { snapshot.preferences.showRanking },
-                set: { newValue in Task { await model.toggle("rankings_opted_out", !newValue) } }
+                set: { newValue in Task { await model.toggle(AccountPreferences.rankingsOptedOutKey, !newValue) } }
             )).disabled(model.isBusy).accessibilityIdentifier("ranking-toggle")
             Toggle("Show me in my network", isOn: Binding(
                 get: { snapshot.preferences.networkVisible },
-                set: { newValue in Task { await model.toggle("network_visible", newValue) } }
-            )).disabled(model.isBusy).accessibilityIdentifier("pref-network_visible")
+                set: { newValue in Task { await model.toggle(AccountPreferences.networkVisibleKey, newValue) } }
+            )).disabled(model.isBusy).accessibilityIdentifier("pref-\(AccountPreferences.networkVisibleKey)")
             Toggle("I’d like to volunteer", isOn: Binding(
                 get: { snapshot.preferences.volunteer },
-                set: { newValue in Task { await model.toggle("volunteer", newValue) } }
+                set: { newValue in Task { await model.toggle(AccountPreferences.volunteerKey, newValue) } }
             )).disabled(model.isBusy).accessibilityIdentifier("pref-volunteer")
             if snapshot.preferences.volunteer {
                 VolunteerInterestsSection(model: model, interests: snapshot.preferences.volunteerInterests)

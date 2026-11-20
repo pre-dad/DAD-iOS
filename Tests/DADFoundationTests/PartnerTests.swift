@@ -698,3 +698,11 @@ final class PartnerReportSizeTests: XCTestCase {
         XCTAssertEqual(retained, report)
     }
 }
+
+final class VolunteerTimeTests: XCTestCase {
+    func testLabelsMinutesBelowAnHourAndHoursToOneDecimal() {
+        let cases: [(Int64, String)] = [(0, "0 minutes"), (1, "1 minute"), (59, "59 minutes"), (60, "1 hour"), (90, "1.5 hours"),
+                                        (125, "2.1 hours"), (120, "2 hours")]
+        for (minutes, label) in cases { XCTAssertEqual(VolunteerTime.label(minutes: minutes), label, "\(minutes)") }
+    }
+}

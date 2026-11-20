@@ -24,6 +24,18 @@ func launchValue(_ name: String) -> String? {
     #endif
 }
 
+/// The tinted rounded panel behind a status or receipt block.
+struct DADPanel: ViewModifier {
+    @Environment(\.colorScheme) private var scheme
+    func body(content: Content) -> some View {
+        content.background(scheme == .dark ? Color.dad("ink") : Color.dad("line").opacity(0.35), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+extension View {
+    func dadPanel() -> some View { modifier(DADPanel()) }
+}
+
 struct AppBackground: ViewModifier {
     @Environment(\.colorScheme) private var scheme
     func body(content: Content) -> some View { content.background(Color.dad(scheme == .dark ? "ink-deep" : "paper")) }
