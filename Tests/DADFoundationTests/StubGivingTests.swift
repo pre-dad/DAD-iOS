@@ -6,6 +6,18 @@ import XCTest
 /// The scripted stub backend drives the UITests, so its giving rules are pinned here: the REAL
 /// `WireGiving` and `WireAccountSettings` run on it exactly as they do in the simulator.
 @MainActor final class StubGivingTests: XCTestCase {
+    func testTimezoneCorrectionSurvivesProfileSavesAndCanReset() async throws {
+        let services = try StubBackend.make(gift: .none, signedIn: true)
+        let first = try await services.management.saveProfile(zip: "78701", city: "Austin", phone: "", timezoneOverride: "America/Phoenix")
+        XCTAssertEqual(first.timezone, "America/Phoenix")
+        XCTAssertEqual(first.timezoneOverride, "America/Phoenix")
+        let kept = try await services.management.saveProfile(zip: "", city: "", phone: "")
+        XCTAssertEqual(kept.timezoneOverride, "America/Phoenix")
+        let reset = try await services.management.saveProfile(zip: "", city: "", phone: "", timezoneOverride: "")
+        XCTAssertNil(reset.timezoneOverride)
+        XCTAssertNil(reset.timezone)
+    }
+
     func testActiveGiftBlocksDeletionUntilItIsCancelledThenDeletes() async throws {
         let services = try StubBackend.make(gift: .active, signedIn: true)
         do { try await services.settings.deleteAccount(); XCTFail("a renewing gift must block deletion") }

@@ -206,6 +206,7 @@ private final class StubTransport: ClientTransport, @unchecked Sendable {
     // Account management: contact details, other sessions, and the employer link. Company code
     // `ACME42` links "Acme"; any other code is unrecognized.
     private var contact = (zip: "78701", city: "Austin", phone: Optional<String>.none)
+    private var timezoneOverride: String?
     private var otherSessions = [#"{"id":"22222222-2222-4222-8222-222222222222","client":"BROWSER","platform":null,"label":"Web browser","created_at":"2026-10-02T10:00:00Z","last_used_at":"2026-10-29T10:00:00Z","current":false}"#]
     private var employer: String?
     private var team: String?
@@ -564,7 +565,12 @@ private final class StubTransport: ClientTransport, @unchecked Sendable {
         case (.post, "/donor/me/profile"):
             let zip = fields["zip"] as? String ?? "", city = fields["city"] as? String ?? "", phone = fields["phone"] as? String ?? ""
             guard zip.isEmpty || zip.range(of: "^[0-9]{5}(-[0-9]{4})?$", options: .regularExpression) != nil else { return reply(.unprocessableContent, "{}") }
-            lock.withLock { contact = (zip, city, phone.isEmpty ? nil : phone) }
+            let zone = fields["timezone_override"] as? String
+            guard zone == nil || StreakTimeZone.choices.contains(where: { $0.value == zone }) else { return reply(.unprocessableContent, "{}") }
+            lock.withLock {
+                contact = (zip, city, phone.isEmpty ? nil : phone)
+                if let zone { timezoneOverride = zone.isEmpty ? nil : zone }
+            }
             return reply(.ok, profile())
         case (.post, "/donor/me/email-change"):
             let email = fields["email"] as? String ?? ""
@@ -617,8 +623,10 @@ private final class StubTransport: ClientTransport, @unchecked Sendable {
     private func profile() -> String {
         lock.withLock {
             let flags = prefs.map { "\"\($0.key)\":\($0.value)" }.sorted().joined(separator: ",")
+            let zone = timezoneOverride.map { "\"\($0)\"" } ?? "null"
+            let correction = timezoneOverride.map { ",\"timezone_override\":\"\($0)\"" } ?? ""
             let phone = contact.phone.map { "\"\($0)\"" } ?? "null"
-            return "{\"email\":\"alex@example.org\",\"public_name\":\"Alex\",\"account_role\":\"DONOR\",\"zip\":\"\(contact.zip)\",\"city\":\"\(contact.city)\",\"timezone\":null,\"phone\":\(phone),\(flags),\"volunteer_interests\":[],\"version\":\(version),\"consent_version\":\"stub-v1\"}"
+            return "{\"email\":\"alex@example.org\",\"public_name\":\"Alex\",\"account_role\":\"DONOR\",\"zip\":\"\(contact.zip)\",\"city\":\"\(contact.city)\",\"timezone\":\(zone)\(correction),\"phone\":\(phone),\(flags),\"volunteer_interests\":[],\"version\":\(version),\"consent_version\":\"stub-v1\"}"
         }
     }
 
