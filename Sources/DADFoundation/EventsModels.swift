@@ -91,7 +91,7 @@ public enum CalendarExport {
         let folder = directory.appendingPathComponent("dad-calendar", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let url = folder.appendingPathComponent("\(safe.isEmpty ? "event" : safe).ics")
-        try data.write(to: url, options: .atomic)
+        try data.write(to: url, options: [.atomic, .completeFileProtection])
         return url
     }
 }
@@ -126,6 +126,8 @@ public final class EventsModel {
     /// The prepared `.ics`, ready for the share sheet.
     public private(set) var calendarFile: CalendarFile?
     public private(set) var calendarPreparing: String?
+    /// Why a refresh failed while earlier rows stay on screen.
+    public private(set) var refreshNotice: String?
 
     private let service: any EventsService
     private let exportDirectory: URL
@@ -137,7 +139,8 @@ public final class EventsModel {
 
     public func load() async {
         let prior = phase
-        phase = .loading
+        if events.isEmpty { phase = .loading }
+        refreshNotice = nil
         do {
             events = try await service.events()
             phase = .ready
@@ -145,7 +148,8 @@ public final class EventsModel {
             phase = prior
         } catch {
             noteSignedOut(error)
-            phase = .failed(error.eventMessage(for: .load))
+            let message = error.eventMessage(for: .load)
+            if events.isEmpty { phase = .failed(message) } else { phase = .ready; refreshNotice = message }
         }
     }
 
@@ -215,7 +219,10 @@ public final class EventsModel {
         }
     }
 
-    public func clearCalendar() { calendarFile = nil }
+    public func clearCalendar() {
+        if let file = calendarFile { try? FileManager.default.removeItem(at: file.url) }
+        calendarFile = nil
+    }
 
     /// Re-fetch one event after a mutation and splice it back into the list in place.
     private func refresh(eventID: String, assuming status: ReservationStatus) async {
@@ -242,7 +249,9 @@ public final class EventsModel {
         actionErrorEventID = eventID
         switch error as? AccountError {
         case .conflict?, .notFound?:
-            if let fresh = try? await service.events() { events = fresh }
+            // Another command's own refresh would be overwritten by this older list.
+            guard busy.subtracting([eventID]).isEmpty else { return }
+            do { events = try await service.events() } catch { noteSignedOut(error) }
         default: break
         }
     }
@@ -256,12 +265,9 @@ public final class EventsModel {
 extension DonorEvent {
     /// The same event with a different reservation status (the server's own count is fetched on refresh).
     func with(status: ReservationStatus) -> DonorEvent {
-        DonorEvent(
-            id: id, slug: slug, title: title, type: type, venue: venue, city: city, startsAt: startsAt, endsAt: endsAt,
-            capacity: capacity, spotsLeft: spotsLeft, status: status, invitationNote: invitationNote,
-            reportIssueURL: reportIssueURL, cancelled: cancelled, bookingOpensAt: bookingOpensAt,
-            earlyBooking: earlyBooking, details: details, address: address,
-            timeZoneID: timeZoneID, checkedInAt: checkedInAt)
+        var copy = self
+        copy.status = status
+        return copy
     }
 }
 
@@ -330,5 +336,4 @@ public final class CheckInModel {
     }
 
     public func reset() { state = .idle }
-
 }

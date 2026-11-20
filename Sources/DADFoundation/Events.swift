@@ -35,8 +35,8 @@ public enum EventAvailability: Sendable, Equatable {
     case notYetOpen(opensAt: Date)
     /// The event has started and the donor holds nothing — the server refuses new reservations (409).
     case started
-    /// Spots remain — offer Reserve.
-    case reservable(spotsLeft: Int)
+    /// Spots remain (nil when the event has no cap) — offer Reserve.
+    case reservable(spotsLeft: Int?)
     /// Full — offer Join waitlist (E-4).
     case waitlistable
     /// Donor already holds a reservation — offer Cancel (E-9).
@@ -64,7 +64,7 @@ public struct DonorEvent: Sendable, Equatable, Identifiable {
     public let endsAt: Date
     public let capacity: Int
     public let spotsLeft: Int
-    public let status: ReservationStatus
+    public internal(set) var status: ReservationStatus
     /// Present only for invite-only events the donor can see (E-5); nil = a public event.
     public let invitationNote: String?
     public let reportIssueURL: String?
@@ -150,7 +150,7 @@ public struct DonorEvent: Sendable, Equatable, Identifiable {
         case .none:
             if now >= startsAt { return .started }
             if let opens = bookingOpensAt, now < opens, !earlyBooking { return .notYetOpen(opensAt: opens) }
-            if isUncapped { return .reservable(spotsLeft: Int.max) }
+            if isUncapped { return .reservable(spotsLeft: nil) }
             return spotsLeft > 0 ? .reservable(spotsLeft: spotsLeft) : .waitlistable
         }
     }

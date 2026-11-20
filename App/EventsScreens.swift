@@ -66,6 +66,9 @@ struct EventsScreen: View {
                     .buttonStyle(DADButtonStyle(.primary)).accessibilityIdentifier("events-retry")
             }
         case .ready:
+            if let notice = model.refreshNotice {
+                Text(notice).foregroundStyle(Color.dad("fail")).accessibilityIdentifier("events-refresh-notice")
+            }
             if let outcome = model.lastOutcome {
                 DADCard {
                     VStack(alignment: .leading, spacing: 4) {

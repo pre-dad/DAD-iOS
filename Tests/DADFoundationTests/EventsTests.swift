@@ -74,7 +74,7 @@ final class EventAvailabilityTests: XCTestCase {
     func testUncappedEventIsAlwaysReservable() {
         let open = makeEvent(spotsLeft: 0, capacity: 0)
         XCTAssertTrue(open.isUncapped)
-        XCTAssertEqual(open.availability(now: now), .reservable(spotsLeft: Int.max))
+        XCTAssertEqual(open.availability(now: now), .reservable(spotsLeft: nil))
         XCTAssertEqual(open.spotsLabel, "Open to everyone")
     }
 
