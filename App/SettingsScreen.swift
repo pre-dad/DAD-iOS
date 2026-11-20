@@ -214,7 +214,7 @@ private struct PasswordSection: View {
                     .textFieldStyle(.roundedBorder).textContentType(.newPassword).accessibilityIdentifier("password-new")
                 SecureField("Confirm new password", text: $model.confirmPassword)
                     .textFieldStyle(.roundedBorder).textContentType(.newPassword).accessibilityIdentifier("password-confirm")
-                Text(model.newPasswordHint ?? "Use 12 to 72 characters.").font(.footnote).foregroundStyle(.secondary)
+                Text(model.newPasswordHint ?? CredentialRules.passwordRule).font(.footnote).foregroundStyle(.secondary)
                 if model.confirmMismatch {
                     Text("The two passwords don’t match.").font(.footnote).foregroundStyle(Color.dad("fail"))
                 }

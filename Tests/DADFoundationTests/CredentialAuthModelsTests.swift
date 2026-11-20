@@ -294,9 +294,18 @@ final class CredentialRulesTests: XCTestCase {
         XCTAssertEqual(service.calls[1].0, "old one here")
     }
 
+    func testTheLengthHintStatesBytesNotCharacters() {
+        let model = PasswordChangeModel(service: FakePasswordSettings())
+        model.newPassword = "short"
+        XCTAssertEqual(model.newPasswordHint, CredentialRules.passwordRule)
+        XCTAssertTrue(CredentialRules.passwordRule.contains("bytes"))
+        model.newPassword = String(repeating: "é", count: 37)
+        XCTAssertNotNil(model.newPasswordHint, "37 characters of two bytes each exceed 72 bytes")
+    }
+
     func testFailureMessagesAndSessionLoss() async {
         let cases: [(AccountError, String, Bool)] = [
-            (.passwordIncorrect, "current password didn’t match", false), (.invalidInput, "12 to 72", false),
+            (.passwordIncorrect, "current password didn’t match", false), (.invalidInput, "12 to 72 bytes", false),
             (.rateLimited, "Too many", false), (.unavailable, "couldn’t save", false), (.signedOut, "sign in again", true),
         ]
         for (error, fragment, signsOut) in cases {
@@ -308,7 +317,8 @@ final class CredentialRulesTests: XCTestCase {
             guard case .failed(let message) = model.phase else { return XCTFail("\(error)") }
             XCTAssertTrue(message.contains(fragment), "\(error): \(message)")
             XCTAssertEqual(model.signedOut, signsOut, "\(error)")
-            XCTAssertEqual(model.newPassword, "a long enough passphrase", "a failed save keeps the form for a retry")
+            XCTAssertEqual(model.newPassword, signsOut ? "" : "a long enough passphrase",
+                           signsOut ? "an ended session clears the secrets" : "a failed save keeps the form for a retry")
         }
     }
 }

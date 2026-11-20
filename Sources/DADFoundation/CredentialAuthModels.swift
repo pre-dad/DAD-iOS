@@ -1,8 +1,9 @@
 import Foundation
 
 // Email signup, email + password sign-in, and set/change password (PRD §5.1, D-2). Pure rules,
-// service seams and state machines so every path is unit-tested without a network or a view.
-// Passwords are never stored, logged or echoed: models clear them as soon as the call returns.
+// service seams and state machines, unit-tested without a network or a view.
+// Passwords are never stored, logged or echoed: models clear them once a call succeeds or the session ends, and
+// keep them after any other failure so the donor can retry.
 
 // MARK: - Shared input rules
 
@@ -22,6 +23,8 @@ public enum CredentialRules {
 
     /// The contract and server accept a new password of 12 to 72 BYTES (bcrypt's limit).
     public static let passwordBytes = 12...72
+    /// Shown wherever the length rule is stated: the limit counts bytes, and some symbols are more than one.
+    public static let passwordRule = "Use 12 to 72 bytes; some symbols count as more than one."
 
     public static func isAcceptableNewPassword(_ password: String) -> Bool {
         passwordBytes.contains(password.utf8.count)
@@ -255,7 +258,7 @@ public final class PasswordChangeModel {
 
     public var newPasswordHint: String? {
         guard !newPassword.isEmpty, !CredentialRules.isAcceptableNewPassword(newPassword) else { return nil }
-        return "Use 12 to 72 characters."
+        return CredentialRules.passwordRule
     }
 
     public var confirmMismatch: Bool { !confirmPassword.isEmpty && confirmPassword != newPassword }
@@ -277,7 +280,10 @@ public final class PasswordChangeModel {
             phase = .saved
         } catch {
             if error.isCancellation { phase = .editing; return }
-            if error as? AccountError == .signedOut { signedOut = true }
+            if error as? AccountError == .signedOut {
+                signedOut = true
+                currentPassword = ""; newPassword = ""; confirmPassword = ""
+            }
             phase = .failed(Self.message(for: error))
         }
     }
@@ -287,7 +293,7 @@ public final class PasswordChangeModel {
     static func message(for error: Error) -> String {
         switch error as? AccountError {
         case .passwordIncorrect: "Your current password didn’t match. Check it and try again."
-        case .invalidInput: "Use a password of 12 to 72 characters."
+        case .invalidInput: CredentialRules.passwordRule
         case .rateLimited: "Too many attempts. Please wait a moment and try again."
         case .signedOut: "Please sign in again."
         case .unavailable: "We couldn’t save your password right now. Please try again in a moment."
