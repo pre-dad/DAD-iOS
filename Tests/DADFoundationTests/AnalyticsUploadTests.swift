@@ -20,6 +20,7 @@ final class AnalyticsUploadTests: XCTestCase {
         XCTAssertEqual(observed(.post, "/donor/me/events/check-in"), [.eventCheckedIn])
         XCTAssertEqual(observed(.get, "/donor/me/events/e1"), [.eventViewed])
         XCTAssertEqual(observed(.get, "/events/e1"), [.eventViewed])
+        XCTAssertEqual(observed(.get, "/donor/me/events/invite-only"), [], "the invite-only list is not one event's page")
         XCTAssertEqual(observed(.get, "/donor/partner/report.pdf"), [.partnerReportExported])
         XCTAssertEqual(observed(.post, "/donor/me/events/e1/reserve", response: #"{"status":"RESERVED"}"#), [.eventReserved])
         XCTAssertEqual(observed(.post, "/donor/me/events/e1/reserve", response: #"{"status":"WAITLISTED"}"#), [.eventWaitlisted])
@@ -122,6 +123,23 @@ final class AnalyticsUploadTests: XCTestCase {
         let after = await analytics.pending
         XCTAssertEqual(after, 0)
         XCTAssertEqual(transport.calls(to: "/analytics/events").count, 1)
+    }
+
+    @MainActor
+    func testEventsRecordedAfterReconsentSurviveTheEarlierDecline() async throws {
+        struct FailingSink: AnalyticsSink {
+            func send(_ batch: AnalyticsBatch) async throws { throw AccountError.unavailable }
+        }
+        let analytics = AnalyticsController(consent: MemoryAnalyticsConsent(choice: true), sink: FailingSink())
+        analytics.emit(.roleSelected)
+        for _ in 0..<200 where await analytics.pending == 0 { try await Task.sleep(for: .milliseconds(10)) }
+        for _ in 0..<50 {
+            analytics.choose(false)
+            analytics.choose(true)
+        }
+        try await Task.sleep(for: .milliseconds(200))
+        let kept = await analytics.pending
+        XCTAssertGreaterThan(kept, 0, "a decline's discard must not drop events recorded after the donor allowed analytics again")
     }
 
     func testTheChoiceIsRememberedInDefaults() throws {

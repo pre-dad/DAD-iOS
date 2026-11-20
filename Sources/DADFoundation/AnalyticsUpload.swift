@@ -43,6 +43,22 @@ private struct ConsentedAnalyticsSink: AnalyticsSink {
     }
 }
 
+/// Runs recorder mutations in the order they were requested, so a decline's discard cannot land after events
+/// recorded once the donor allows analytics again.
+private final class OrderedRecorderQueue: @unchecked Sendable {
+    private let lock = NSLock()
+    private var tail: Task<Void, Never>?
+
+    func enqueue(_ operation: @escaping @Sendable () async -> Void) -> Task<Void, Never> {
+        lock.withLock {
+            let previous = tail
+            let task = Task { await previous?.value; await operation() }
+            tail = task
+            return task
+        }
+    }
+}
+
 /// The app's analytics: records nothing until the donor allows it, then buffers events in the recorder and uploads
 /// them in the background (a failed upload is retried with the next event once its backoff has passed). Declining drops anything still buffered.
 /// One journey id per launch groups a visit, like the website's per-tab journey.
@@ -53,6 +69,7 @@ public final class AnalyticsController {
     @ObservationIgnored private let consent: any AnalyticsConsent
     @ObservationIgnored private let recorder: AnalyticsRecorder
     @ObservationIgnored private let journey = UUID()
+    @ObservationIgnored private let queue = OrderedRecorderQueue()
 
     public init(consent: any AnalyticsConsent, sink: any AnalyticsSink) {
         self.consent = consent
@@ -67,7 +84,7 @@ public final class AnalyticsController {
             emit(.appOpened)
         } else {
             let recorder = recorder
-            Task { await recorder.discardPending() }
+            _ = queue.enqueue { await recorder.discardPending() }
         }
     }
 
@@ -77,10 +94,14 @@ public final class AnalyticsController {
               let record = try? AnalyticsRecord(event, properties: properties, journeyID: journey) else { return }
         let recorder = recorder
         let consent = consent
-        Task {
+        let recorded = queue.enqueue {
             guard consent.choice == true else { return }
             await recorder.record(record)
-            guard consent.choice == true else { await recorder.discardPending(); return }
+            if consent.choice != true { await recorder.discardPending() }
+        }
+        Task {
+            await recorded.value
+            guard consent.choice == true else { return }
             try? await recorder.flushWhenDue()
         }
     }
@@ -131,7 +152,7 @@ public struct WireAnalytics: AnalyticsSink {
 func observedEvents(method: HTTPRequest.Method, path: String, requestBody: () -> Data?, responseBody: () -> Data?) -> [AnalyticsEvent] {
     func object(_ data: Data?) -> [String: Any]? { data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } }
     if method == .get {
-        if path.wholeMatch(of: /\/(donor\/me\/)?events\/[^\/]+/) != nil { return [.eventViewed] }
+        if path.wholeMatch(of: /\/(donor\/me\/)?events\/[^\/]+/) != nil, path != "/donor/me/events/invite-only" { return [.eventViewed] }
         if path == "/donor/partner/report.pdf" { return [.partnerReportExported] }
         return []
     }
