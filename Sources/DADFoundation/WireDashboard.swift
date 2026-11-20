@@ -21,7 +21,7 @@ public struct WireDashboard: DashboardService {
     init(product: ProductClient) { self.product = product }
 
     public func dashboard() async throws -> DashboardState {
-        try await product.perform { client in
+        try await product.call { client in
             switch try await client.dashboard(.init()) {
             case .ok(let response):
                 switch try response.body.json {
@@ -37,7 +37,7 @@ public struct WireDashboard: DashboardService {
     }
 
     public func todayInitiative() async throws -> TodayInitiative? {
-        try await product.perform { client in
+        try await product.call { client in
             switch try await client.todayInitiative(.init()) {
             case .ok(let response):
                 let value = try response.body.json
@@ -59,7 +59,7 @@ public struct WireDashboard: DashboardService {
 
     public func gifts(offset: Int) async throws -> GiftHistoryPage {
         guard offset >= 0 else { throw AccountError.invalidInput }
-        return try await product.perform { client in
+        return try await product.call { client in
             switch try await client.gifts(.init(query: .init(offset: Int64(offset)))) {
             case .ok(let response):
                 let page = try response.body.json
@@ -82,7 +82,7 @@ public struct WireDashboard: DashboardService {
     public func receipt(giftID: String) async throws -> GiftReceipt {
         // A malformed id is a 404 server-side; refuse it before it becomes a path segment.
         guard UUID(uuidString: giftID) != nil else { throw AccountError.invalidInput }
-        return try await product.perform { client in
+        return try await product.call { client in
             switch try await client.receipt(.init(path: .init(gift_id: giftID))) {
             case .ok(let response):
                 let value = try response.body.json
@@ -99,7 +99,7 @@ public struct WireDashboard: DashboardService {
 
     public func annualSummary(year: Int) async throws -> AnnualGivingSummary {
         guard (2000...9999).contains(year) else { throw AccountError.invalidInput }
-        return try await product.perform { client in
+        return try await product.call { client in
             switch try await client.annualSummary(.init(path: .init(year: year))) {
             case .ok(let response):
                 let value = try response.body.json
@@ -117,6 +117,7 @@ public struct WireDashboard: DashboardService {
         }
     }
 
+    /// Narrower than `AccountError.forStatus` on purpose: dashboard reads treat 403/404/409 as unavailable, not as actionable errors.
     private static func undocumented(_ status: Int) -> AccountError {
         switch status {
         case 401: return .signedOut

@@ -109,6 +109,14 @@ final class WireDashboardTests: XCTestCase {
         }
     }
 
+    func testBodylessIngress429MapsToRateLimited() async throws {
+        let rig = try make(ScriptedTransport { _, _ in (.tooManyRequests, "") })
+        do { _ = try await rig.service.dashboard(); XCTFail("expected rate limited") }
+        catch { XCTAssertEqual(error as? AccountError, .rateLimited) }
+        do { _ = try await rig.service.gifts(offset: 0); XCTFail("expected rate limited") }
+        catch { XCTAssertEqual(error as? AccountError, .rateLimited) }
+    }
+
     func testMalformedBodyIsAnErrorNotACrash() async throws {
         for body in ["not json", #"{"state":"ready"}"#, #"{"state":"mystery","mode":"test"}"#] {
             let rig = try make(ScriptedTransport { _, _ in (.ok, body) })
