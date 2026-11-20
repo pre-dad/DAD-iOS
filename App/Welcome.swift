@@ -1,32 +1,5 @@
 import SwiftUI
-import Combine
 import DADFoundation
-
-/// The Founding Donor window closes at the end of Dec 31 2026, New York time. Shown at most once per
-/// screen (Welcome and the celebration). After the deadline the line is hidden entirely.
-enum FoundingWindow {
-    /// Start of Jan 1 2027 America/New_York — the first instant the window is closed.
-    static let closesAt: Date = {
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = TimeZone(identifier: "America/New_York") ?? .current
-        return cal.date(from: DateComponents(year: 2027, month: 1, day: 1)) ?? .distantFuture
-    }()
-
-    /// Whole days remaining until the window closes, or nil once it has (hide the line).
-    static func daysRemaining(from now: Date = Date()) -> Int? {
-        guard now < closesAt else { return nil }
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = TimeZone(identifier: "America/New_York") ?? .current
-        let days = cal.dateComponents([.day], from: now, to: closesAt).day ?? 0
-        return max(days, 0)
-    }
-
-    /// "Founding Donor: 54 days left" — nil after the deadline.
-    static func line(from now: Date = Date()) -> String? {
-        guard let days = daysRemaining(from: now) else { return nil }
-        return "Founding Donor: \(days) \(days == 1 ? "day" : "days") left"
-    }
-}
 
 /// The unauthenticated landing: brand, value proposition, the Founding window, the invitation and
 /// notice messages, and three graded actions. Each action emits `.roleSelected`.
@@ -109,9 +82,8 @@ private struct SignInMethods: View {
                 Button(SignInMethod.password.title) { onSelect(.password) }
                     .buttonStyle(DADButtonStyle(.tertiary))
             }
-            if capabilities.hasUnavailableMethod {
-                // Honest note that some methods this build can't offer are simply not shown.
-                Text("Apple, Google and passkey sign-in aren’t available in this build yet.")
+            if let note = capabilities.unavailableNote {
+                Text(note)
                     .font(.footnote).foregroundStyle(.secondary).accessibilityIdentifier("methods-unavailable-note")
             }
             Divider()
@@ -154,6 +126,9 @@ private struct PhoneSignIn: View {
                     .textContentType(.telephoneNumber)
                     .keyboardType(.phonePad)
                     .accessibilityLabel("Phone number")
+                if let hint = model.phoneFormatHint {
+                    Text(hint).font(.footnote).foregroundStyle(.secondary).accessibilityIdentifier("phone-format-hint")
+                }
                 failure
                 Button("Send code") { Task { await model.requestCode() } }
                     .buttonStyle(DADButtonStyle(.primary))
@@ -242,9 +217,23 @@ private struct CheckEmailView: View {
     /// Seconds until Resend re-enables. A STATIC count (a once-a-second tick, never an animated
     /// number) honours the motion rule: the digits change, nothing animates.
     @State private var resendIn = 30
-    private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    /// Bumped on every resend so the countdown task restarts.
+    @State private var resendRound = 0
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            content
+        }
+        .task(id: resendRound) {
+            while resendIn > 0 {
+                try? await Task.sleep(for: .seconds(1))
+                if Task.isCancelled { return }
+                resendIn -= 1
+            }
+        }
+    }
+
+    @ViewBuilder private var content: some View {
         Text("Check your inbox").font(.headline).accessibilityAddTraits(.isHeader).accessibilityIdentifier("signup-sent")
         (Text("We emailed ") + Text(email).bold() + Text(" a sign-in link. \(detail)"))
         if let notice {
@@ -260,10 +249,9 @@ private struct CheckEmailView: View {
         }
         Button("Continue") { pasteFailed = !onPasteLink(pasted) }
             .buttonStyle(DADButtonStyle(.primary)).disabled(pasted.isEmpty).accessibilityIdentifier("signup-continue")
-        Button(resendIn > 0 ? "Resend in \(resendIn)s" : "Resend the email") { resendIn = 30; onResend() }
+        Button(resendIn > 0 ? "Resend in \(resendIn)s" : "Resend the email") { resendIn = 30; resendRound += 1; onResend() }
             .buttonStyle(DADButtonStyle(.secondary)).disabled(resendIn > 0).accessibilityIdentifier("signup-resend")
         Button("Use a different email", action: onEdit).buttonStyle(DADButtonStyle(.secondary))
-            .onReceive(tick) { _ in if resendIn > 0 { resendIn -= 1 } }
     }
 }
 
@@ -408,6 +396,8 @@ struct UnauthenticatedStack: View {
     let onSignedIn: () -> Void
     @State private var step: Step = .roleSelect
     @State private var external: ExternalRun?
+    /// Where signup's Back returns to: the screen the donor came from, not always the sign-in methods.
+    @State private var signupOrigin: Step = .roleSelect
     private enum Step: Equatable { case roleSelect, methods, phone, emailLink, password, signup, external, partner }
 
     var body: some View {
@@ -418,11 +408,11 @@ struct UnauthenticatedStack: View {
         switch step {
         case .roleSelect:
             WelcomeScreen(notice: notice, invitation: invitation,
-                          onGive: { step = .signup },
+                          onGive: { signupOrigin = .roleSelect; step = .signup },
                           onSignIn: { step = .methods },
                           onPartner: { step = .partner })
         case .methods:
-            SignInMethods(capabilities: kit.capabilities, onSelect: select, onCreateAccount: { step = .signup })
+            SignInMethods(capabilities: kit.capabilities, onSelect: select, onCreateAccount: { signupOrigin = .methods; step = .signup })
         case .phone:
             PhoneSignIn(model: PhoneSignInModel(service: kit.phone, establish: establish), onBack: { step = .methods }, onSignedIn: onSignedIn)
         case .password:
@@ -431,7 +421,7 @@ struct UnauthenticatedStack: View {
         case .emailLink:
             EmailLinkSignIn(model: SignInLinkModel(service: kit.link), notice: notice, onBack: { step = .methods }, onPasteLink: onPasteLink)
         case .signup:
-            SignupView(model: SignupModel(service: kit.signup), notice: notice, onBack: { step = .methods }, onPasteLink: onPasteLink)
+            SignupView(model: SignupModel(service: kit.signup), notice: notice, onBack: { step = signupOrigin }, onPasteLink: onPasteLink)
         case .external:
             if let external {
                 ExternalSignInView(run: external, onBack: { step = .methods; self.external = nil }, onSignedIn: onSignedIn)

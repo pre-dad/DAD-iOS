@@ -285,9 +285,9 @@ final class ApplicationDecisionDiscardTests: XCTestCase {
     func testTheWireStatusDiscardsOnlyItsOwnReceipt() throws {
         let store = MemoryStore(Credentials(access: String(repeating: "r", count: 43), refresh: "", expiresAt: Date().addingTimeInterval(86_400)))
         let wire = WireApplicationStatus(origin: testOrigin, transport: ScriptedTransport { _, _ in (.ok, "{}") }, receipt: store)
-        XCTAssertTrue(wire.hasReceipt)
+        XCTAssertNotNil(try store.load())
         try wire.discardReceipt()
-        XCTAssertFalse(wire.hasReceipt)
+        XCTAssertNil(try store.load())
     }
 }
 
