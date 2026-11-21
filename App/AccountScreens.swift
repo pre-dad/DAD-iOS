@@ -151,6 +151,7 @@ struct EmployerSection: View {
 /// Where the donor is signed in: end one other session, every other one, or every session.
 struct SessionsSection: View {
     @State private var model: DeviceSessionsModel
+    @State private var confirmingSignOutEverywhere = false
     let onSignedOut: () -> Void
 
     init(service: any AccountManagementService, onSignedOut: @escaping () -> Void) {
@@ -177,8 +178,24 @@ struct SessionsSection: View {
             }
             if let notice = model.notice { Text(notice).font(.footnote).accessibilityIdentifier("sessions-notice") }
             if let error = model.actionError { failureText(error, id: "sessions-error") }
-            Button("Sign out on every device") { Task { await model.signOutEverywhere() } }
-                .buttonStyle(DADButtonStyle(.secondary)).disabled(model.isBusy).accessibilityIdentifier("sessions-sign-out-everywhere")
+            if confirmingSignOutEverywhere {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Sign out everywhere, including this device?").font(.subheadline)
+                    HStack {
+                        Button("Yes, sign out everywhere") {
+                            confirmingSignOutEverywhere = false
+                            Task { await model.signOutEverywhere() }
+                        }
+                        .buttonStyle(DADButtonStyle(.destructive)).disabled(model.isBusy)
+                        .accessibilityIdentifier("sessions-sign-out-everywhere-confirm")
+                        Button("Keep me signed in") { confirmingSignOutEverywhere = false }.buttonStyle(DADButtonStyle(.secondary))
+                    }
+                }
+                .accessibilityElement(children: .contain).accessibilityIdentifier("sessions-sign-out-everywhere-prompt")
+            } else {
+                Button("Sign out on every device") { confirmingSignOutEverywhere = true }
+                    .buttonStyle(DADButtonStyle(.secondary)).disabled(model.isBusy).accessibilityIdentifier("sessions-sign-out-everywhere")
+            }
         }
         .accessibilityElement(children: .contain).accessibilityIdentifier("sessions-section")
         .task { await model.load() }

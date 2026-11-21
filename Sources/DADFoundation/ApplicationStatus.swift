@@ -80,9 +80,6 @@ public struct WireApplicationStatus: ApplicationStatusService {
         self.origin = origin; self.transport = transport; self.receipt = receipt
     }
 
-    /// Whether a receipt is kept, so the UI can skip the section entirely when there is nothing to show.
-    public var hasReceipt: Bool { ((try? receipt.load()) ?? nil) != nil }
-
     public func discardReceipt() throws { try receipt.clear() }
 
     public func status() async throws -> ApplicationStatusInfo? {

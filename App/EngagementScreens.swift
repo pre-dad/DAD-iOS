@@ -16,13 +16,15 @@ private struct EngagementBackground: ViewModifier {
     }
 }
 
+private let qrContext = CIContext()
+
 /// A QR code drawn locally with CoreImage, scaled by `scale` so it stays sharp when shown with `.interpolation(.none)`.
 func qrCodeImage(_ text: String, scale: CGFloat) -> UIImage? {
     let filter = CIFilter.qrCodeGenerator()
     filter.message = Data(text.utf8)
     filter.correctionLevel = "M"
     guard let output = filter.outputImage?.transformed(by: CGAffineTransform(scaleX: scale, y: scale)),
-          let cgImage = CIContext().createCGImage(output, from: output.extent) else { return nil }
+          let cgImage = qrContext.createCGImage(output, from: output.extent) else { return nil }
     return UIImage(cgImage: cgImage)
 }
 
@@ -281,6 +283,11 @@ struct EngagementHome: View {
                 }
             }
         }.accessibilityElement(children: .contain).accessibilityIdentifier("invite-section")
+            .task(id: copied) {
+                guard copied else { return }
+                try? await Task.sleep(for: .seconds(3))
+                copied = false
+            }
     }
 
     @ViewBuilder private func conversions(_ referral: ReferralInfo) -> some View {

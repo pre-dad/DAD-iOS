@@ -331,8 +331,16 @@ final class SignInCapabilityTests: XCTestCase {
         XCTAssertTrue(capabilities.isAvailable(.phone))
         XCTAssertTrue(capabilities.isAvailable(.password))
         for method in [SignInMethod.apple, .google, .passkey] { XCTAssertFalse(capabilities.isAvailable(method), method.rawValue) }
-        XCTAssertTrue(capabilities.hasUnavailableMethod)
+        XCTAssertEqual(capabilities.unavailableNote, "Apple, Google and passkey sign-in aren’t available in this build yet.")
         XCTAssertEqual(SignInCapabilities(config: SignInConfig(appleFlag: nil, googleClientID: nil, passkeyRelyingParty: nil)), .none)
+    }
+
+    func testTheUnavailableNoteNamesOnlyTheMissingMethods() {
+        XCTAssertNil(SignInCapabilities(apple: true, google: true, passkey: true).unavailableNote)
+        XCTAssertEqual(SignInCapabilities(apple: true, google: false, passkey: true).unavailableNote,
+                       "Google sign-in isn’t available in this build yet.")
+        XCTAssertEqual(SignInCapabilities(apple: false, google: true, passkey: false).unavailableNote,
+                       "Apple and passkey sign-in aren’t available in this build yet.")
     }
 
     func testEachMethodSwitchesOnlyWithItsOwnValidConfiguration() {

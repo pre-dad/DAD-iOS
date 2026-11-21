@@ -21,6 +21,23 @@ import XCTest
         XCTAssertTrue(app.buttons["Continue with phone"].waitForExistence(timeout: 5), "a donor can choose another sign-in method")
     }
 
+    /// Signup's Back returns to wherever signup was opened from: Welcome for "Give $1 a day", the
+    /// sign-in methods for "Get started".
+    func testSignupBackReturnsToWhereItWasOpenedFrom() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--preview-signed-out"]
+        app.launchInForeground()
+
+        app.buttons["Give $1 a day"].tapWhenReady()
+        app.buttons["signup-back"].tapWhenReady()
+        XCTAssertTrue(app.buttons["Give $1 a day"].waitForExistence(timeout: 5), "Back from a signup begun on Welcome returns to Welcome")
+
+        app.buttons["I already give — sign in"].tapWhenReady()
+        app.buttons["create-account"].tapWhenReady()
+        app.buttons["signup-back"].tapWhenReady()
+        XCTAssertTrue(app.buttons["Continue with phone"].waitForExistence(timeout: 5), "Back from Get started returns to the sign-in methods")
+    }
+
     /// A valid phone number advances to code entry, and Send code stays disabled for junk input.
     func testPhoneNumberAdvancesToCodeEntry() {
         let app = XCUIApplication()
@@ -34,7 +51,7 @@ import XCTest
         XCTAssertTrue(phone.waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["Send code"].isEnabled)
         phone.tap()
-        phone.typeText("+14155551234")
+        phone.typeText("4155551234")
         XCTAssertTrue(app.buttons["Send code"].isEnabled)
         app.buttons["Send code"].tap()
 

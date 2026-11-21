@@ -268,13 +268,14 @@ public final class EmployerModel {
     /// True once the server reports the session ended, so the screen leaves the signed-in shell.
     public private(set) var signedOut = false
     private let service: any AccountManagementService
+    private static let teamNameLimit = 80
 
     public init(service: any AccountManagementService) { self.service = service }
 
     public var canEnroll: Bool { !companyCode.trimmingCharacters(in: .whitespaces).isEmpty && !isBusy }
     public var canJoinTeam: Bool {
         let name = teamName.trimmingCharacters(in: .whitespaces)
-        return !name.isEmpty && name.count <= 80 && !isBusy
+        return !name.isEmpty && name.count <= Self.teamNameLimit && !isBusy
     }
 
     public func load() async {
@@ -299,7 +300,7 @@ public final class EmployerModel {
     public func joinTeam() async {
         guard canJoinTeam else { return }
         let name = teamName.trimmingCharacters(in: .whitespaces)
-        await act(invalid: "That team name couldn’t be saved. Use up to 80 characters.", conflict: nil) {
+        await act(invalid: "That team name couldn’t be saved. Use up to \(Self.teamNameLimit) characters.", conflict: nil) {
             try await self.service.joinTeam(name: name)
             self.teamName = ""
         }
@@ -311,17 +312,25 @@ public final class EmployerModel {
         actionError = nil
         do {
             try await work()
-            phase = .ready(try await service.employer())
         } catch where error.isCancellation {
             return
         } catch AccountError.signedOut {
             signedOut = true
+            return
         } catch AccountError.invalidInput {
             actionError = invalid
+            return
         } catch AccountError.conflict where conflict != nil {
             actionError = conflict
+            return
         } catch {
             actionError = error.userMessage
+            return
         }
+        // The change is saved; a failed refresh must not read as a failed save.
+        do { phase = .ready(try await service.employer()) }
+        catch where error.isCancellation { return }
+        catch AccountError.signedOut { signedOut = true }
+        catch { actionError = "Saved, but we couldn’t refresh your employer details. Reopen this screen to see them." }
     }
 }

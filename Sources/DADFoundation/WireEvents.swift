@@ -28,7 +28,17 @@ public struct WireEvents: EventsService {
     init(product: ProductClient) { self.product = product }
 
     public func events() async throws -> [DonorEvent] {
-        let own = try await product.call { client in
+        async let own = ownEvents()
+        async let gated = inviteOnlyEvents()
+        // The same event may appear in both reads; keep one, then soonest-first (E-2) BEFORE the cap,
+        // so an oversized body drops the latest events rather than the soonest.
+        var seen = Set<String>()
+        let rows = try await (own + gated).filter { seen.insert($0.id).inserted }
+        return Array(rows.map(Self.map).sorted { $0.startsAt < $1.startsAt }.prefix(Self.eventRowLimit))
+    }
+
+    private func ownEvents() async throws -> [Components.Schemas.EventView] {
+        try await product.call { client in
             switch try await client.donorEvents(.init()) {
             case .ok(let response): return try response.body.json.events
             case .unauthorized: throw AccountError.signedOut
@@ -37,7 +47,10 @@ public struct WireEvents: EventsService {
             case .undocumented(let status, _): throw AccountError.forStatus(status)
             }
         }
-        let gated = try await product.call { client in
+    }
+
+    private func inviteOnlyEvents() async throws -> [Components.Schemas.EventView] {
+        try await product.call { client in
             switch try await client.inviteOnlyEvents(.init()) {
             case .ok(let response): return try response.body.json.events
             case .unauthorized: throw AccountError.signedOut
@@ -46,10 +59,6 @@ public struct WireEvents: EventsService {
             case .undocumented(let status, _): throw AccountError.forStatus(status)
             }
         }
-        // The same event may appear in both reads; keep one, then soonest-first (E-2).
-        var seen = Set<String>()
-        return (own + gated).filter { seen.insert($0.id).inserted }
-            .prefix(Self.eventRowLimit).map(Self.map).sorted { $0.startsAt < $1.startsAt }
     }
 
     public func event(id: String) async throws -> DonorEvent {
@@ -131,9 +140,10 @@ public struct WireEvents: EventsService {
             switch try await client.donorEventCalendar(.init(path: .init(event_id: eventID))) {
             case .ok(let response):
                 let body = try response.body.text_calendar
-                // A body over the cap throws from `collecting`; it is not an event file, so unavailable.
-                guard let bytes = try? await Data(collecting: body, upTo: Self.calendarByteLimit) else { throw AccountError.invalidResponse }
-                return bytes
+                // A body over the cap throws from `collecting`; it is not an event file, so an invalid response.
+                do { return try await Data(collecting: body, upTo: Self.calendarByteLimit) }
+                catch where error.isCancellation { throw error }
+                catch { throw AccountError.invalidResponse }
             case .unauthorized: throw AccountError.signedOut
             case .notFound: throw AccountError.notFound
             case .tooManyRequests: throw AccountError.rateLimited

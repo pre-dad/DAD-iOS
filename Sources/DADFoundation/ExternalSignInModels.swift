@@ -50,8 +50,14 @@ public struct SignInCapabilities: Sendable, Equatable {
         }
     }
 
-    /// True when any optional method is hidden, so the screen can say so in plain text.
-    public var hasUnavailableMethod: Bool { !(apple && google && passkey) }
+    /// Plain-text explanation naming only the methods this build cannot offer, so the screen can say
+    /// why they are hidden; nil when all are on.
+    public var unavailableNote: String? {
+        let names = [(apple, "Apple"), (google, "Google"), (passkey, "passkey")].filter { !$0.0 }.map(\.1)
+        guard let last = names.last else { return nil }
+        let list = names.count == 1 ? last : names.dropLast().joined(separator: ", ") + " and " + last
+        return "\(list) sign-in \(names.count == 1 ? "isn’t" : "aren’t") available in this build yet."
+    }
 }
 
 public enum OIDCProvider: String, Sendable, Equatable, CaseIterable {

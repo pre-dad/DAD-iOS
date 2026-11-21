@@ -64,6 +64,7 @@ import XCTest
         XCTAssertTrue(app.staticTexts["You’re not signed in anywhere else."].waitForExistence(timeout: 10))
         XCTAssertFalse(other.exists)
         app.buttons["sessions-sign-out-everywhere"].tap()
+        app.buttons["sessions-sign-out-everywhere-confirm"].tapWhenReady()
         XCTAssertTrue(app.buttons["Give $1 a day"].waitForExistence(timeout: 15),
                       "ending every session must return to the welcome screen")
         XCTAssertFalse(app.buttons["open-settings"].exists)

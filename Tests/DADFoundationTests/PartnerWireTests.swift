@@ -174,10 +174,11 @@ final class WireApplicationStatusTests: XCTestCase {
 
     func testNoReceiptMeansNoCallAndNothingToShow() async throws {
         let transport = ScriptedTransport { _, _ in (.ok, "{}") }
-        let wire = WireApplicationStatus(origin: testOrigin, transport: transport, receipt: MemoryStore(nil))
+        let store = MemoryStore(nil)
+        let wire = WireApplicationStatus(origin: testOrigin, transport: transport, receipt: store)
         let info = try await wire.status()
         XCTAssertNil(info)
-        XCTAssertFalse(wire.hasReceipt)
+        XCTAssertNil(try store.load())
         XCTAssertTrue(transport.seen.isEmpty)
     }
 

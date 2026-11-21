@@ -69,6 +69,9 @@ public final class GivingModel {
     public private(set) var handoff: HostedHandoff?
     /// A non-error line the screen shows (saved, cancelled, still confirming...).
     public private(set) var notice: String?
+    /// Bumped each time a gift is set up or its amount saved (never by a plain load), so the screen can
+    /// tie its success haptic to the action rather than to the gift merely appearing.
+    public private(set) var giftsSaved = 0
     /// The first read completed, so the screen can tell "loading" from "loaded, then a command failed".
     public private(set) var hasLoaded = false
     /// After a hosted page closes the model polls until the server reflects the outcome.
@@ -151,6 +154,7 @@ public final class GivingModel {
             await fail(error, rereadOnConflict: true)
             return
         }
+        giftsSaved += 1
         await readSupporting()
         notice = "Saved. Your next renewal will be \(formatUSDMinor(currentAmountMinor ?? selection.monthlyMinor))."
         phase = .idle
@@ -219,6 +223,7 @@ public final class GivingModel {
         }
         syncSelection()
         hasLoaded = true
+        if settled, finished.purpose == .startGift { giftsSaved += 1 }
         guard !Task.isCancelled else { return }
         notice = Self.outcome(finished.purpose, settled: settled, recurring: recurring, payment: payment)
     }
