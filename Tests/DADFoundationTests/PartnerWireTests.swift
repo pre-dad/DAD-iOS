@@ -262,6 +262,16 @@ final class PartnerDonorSessionSeparationTests: XCTestCase {
         XCTAssertEqual(try donorStore.load()?.access, "donor-access")
     }
 
+    func testUsersCarryWhetherTheInvitationWasAccepted() async throws {
+        let transport = ScriptedTransport { _, _ in
+            (.ok, #"{"users":[{"id":"u1","email":"a@x.com","name":"Ada","role":"ADMIN","accepted":true},{"id":"u2","email":"b@x.com","name":"Bea","role":"VIEWER","accepted":false}]}"#)
+        }
+        let session = try PartnerSession(store: MemoryStore(nil))
+        try await session.install(token: "PB")
+        let users = try await WirePartner(origin: testOrigin, transport: transport, session: session).users()
+        XCTAssertEqual(users.map(\.accepted), [true, false])
+    }
+
     func testPartnerCallsNeverCarryTheDonorToken() async throws {
         let transport = ScriptedTransport { _, _ in (.ok, #"{"users":[]}"#) }
         let partner = try PartnerSession(store: MemoryStore(nil))

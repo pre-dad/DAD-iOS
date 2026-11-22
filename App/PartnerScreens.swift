@@ -509,6 +509,11 @@ private struct PartnerUsersSection: View {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         Text("\(user.name) · \(user.role == .admin ? "Admin" : "Viewer")")
+                        if !user.accepted {
+                            Text("Pending").font(.footnote).foregroundStyle(.secondary)
+                                .accessibilityLabel("Invitation pending")
+                                .accessibilityIdentifier("partner-user-pending-\(user.id)")
+                        }
                         if model.canRemove(user) {
                             Spacer()
                             Button("Remove") { model.requestRemoval(id: user.id) }

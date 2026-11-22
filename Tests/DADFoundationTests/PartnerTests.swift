@@ -554,7 +554,7 @@ final class WirePartnerTests: XCTestCase {
         let transport = ScriptedTransport { seen, _ in
             switch seen.request.path {
             case "/donor/partner/accept-invite": return (.ok, #"{"session":"PB"}"#)
-            case "/donor/partner/users": return (.ok, #"{"users":[{"id":"u1","email":"a@x.com","name":"A","role":"ADMIN"}]}"#)
+            case "/donor/partner/users": return (.ok, #"{"users":[{"id":"u1","email":"a@x.com","name":"A","role":"ADMIN","accepted":true}]}"#)
             default: return (.ok, "{}")
             }
         }

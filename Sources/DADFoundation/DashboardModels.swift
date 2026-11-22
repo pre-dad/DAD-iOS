@@ -87,10 +87,13 @@ public struct DonorDashboard: Sendable, Equatable {
     public let impact: ImpactTotals
     public let network: NetworkSummary?
     public let referrals: ReferralTotals?
+    /// The approved "Your insights" layout, drawn; nil when the server sent none or this build cannot draw it.
+    public let insights: InsightsPanel?
     public init(computedAt: Date, foundingDonor: Bool, streak: StreakCard?, rank: RankLine, impact: ImpactTotals,
-                network: NetworkSummary?, referrals: ReferralTotals?) {
+                network: NetworkSummary?, referrals: ReferralTotals?, insights: InsightsPanel? = nil) {
         self.computedAt = computedAt; self.foundingDonor = foundingDonor; self.streak = streak
         self.rank = rank; self.impact = impact; self.network = network; self.referrals = referrals
+        self.insights = insights
     }
 }
 

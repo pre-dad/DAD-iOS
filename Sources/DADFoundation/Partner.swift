@@ -208,11 +208,14 @@ public struct PartnerUser: Sendable, Equatable, Identifiable {
     public let email: String
     public let name: String
     public let role: PartnerRole
-    public init(id: String, email: String, name: String, role: PartnerRole) {
+    /// False while the invitation is still unanswered.
+    public let accepted: Bool
+    public init(id: String, email: String, name: String, role: PartnerRole, accepted: Bool = true) {
         self.id = id
         self.email = email
         self.name = name
         self.role = role
+        self.accepted = accepted
     }
 }
 
