@@ -165,8 +165,8 @@ private final class StubTransport: ClientTransport, @unchecked Sendable {
     private var partnerAbout = "Doing good together."
     private var partnerWorkforce = 240
     private var partnerLogo: Data?
-    private var partnerUsers = [#"{"id":"u1","email":"ada@acme.com","name":"Ada Admin","role":"ADMIN"}"#,
-                                #"{"id":"u2","email":"val@acme.com","name":"Val Viewer","role":"VIEWER"}"#]
+    private var partnerUsers = [#"{"id":"u1","email":"ada@acme.com","name":"Ada Admin","role":"ADMIN","accepted":true}"#,
+                                #"{"id":"u2","email":"val@acme.com","name":"Val Viewer","role":"VIEWER","accepted":true}"#]
     // r1 is listed as downloadable but has aged out on the server: downloading it is the 404 path.
     private var partnerExports = [#"{"id":"r1","committed_minor":4000000,"deployed_minor":2000000,"people_reached":9000,"exported_by":"Ada Admin","created_at":"2026-09-01T10:00:00Z","downloadable":true,"people_reached_verified":true}"#]
     private var prefs: [String: Bool] = [
@@ -488,7 +488,7 @@ private final class StubTransport: ClientTransport, @unchecked Sendable {
             guard let email = fields["email"] as? String, email.contains("@"), let name = fields["name"] as? String, !name.isEmpty,
                   let role = fields["role"] as? String else { return reply(.unprocessableContent, "{}") }
             if email.hasPrefix("taken") { return reply(.conflict, "{}") }
-            lock.withLock { partnerUsers.append(#"{"id":"u\#(partnerUsers.count + 1)","email":\#(Self.quoted(email)),"name":\#(Self.quoted(name)),"role":"\#(role)"}"#) }
+            lock.withLock { partnerUsers.append(#"{"id":"u\#(partnerUsers.count + 1)","email":\#(Self.quoted(email)),"name":\#(Self.quoted(name)),"role":"\#(role)","accepted":false}"#) }
             return reply(.ok, #"{"invited":true}"#)
         case (.post, _) where path.hasPrefix("/donor/partner/users/") && path.hasSuffix("/remove"):
             let id = path.dropFirst("/donor/partner/users/".count).dropLast("/remove".count)

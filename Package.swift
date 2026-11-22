@@ -16,7 +16,7 @@ let package = Package(
             .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
             .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
             .product(name: "HTTPTypes", package: "swift-http-types"),
-        ], resources: [.copy("links.json")], plugins: [.plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")]),
+        ], resources: [.copy("links.json"), .copy("ui-catalog.json"), .copy("ui-binds.json")], plugins: [.plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")]),
         .testTarget(name: "DADFoundationTests", dependencies: ["DADFoundation", .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime")]),
     ]
 )

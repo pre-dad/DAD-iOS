@@ -232,7 +232,7 @@ actor PreviewPartner: PartnerService {
     }
     func users() async throws -> [PartnerUser] { userList }
     func inviteUser(email: String, name: String, role: PartnerRole) async throws {
-        userList.append(PartnerUser(id: "u\(userList.count + 1)", email: email, name: name, role: role))
+        userList.append(PartnerUser(id: "u\(userList.count + 1)", email: email, name: name, role: role, accepted: false))
     }
     func removeUser(id: String) async throws { userList.removeAll { $0.id == id } }
     func saveProfile(organization: String, description: String) async throws {

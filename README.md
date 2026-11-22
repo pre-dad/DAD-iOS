@@ -49,7 +49,7 @@ Debug previews and stub-backed runs.
 
 ## Shared contract and native boundaries
 
-`foundation.lock.json` pins mobile foundation 2.13.0 and its manifest digest. The vendored
+`foundation.lock.json` pins mobile foundation 3.0.0 and its manifest digest. The vendored
 release is verified before generation. `prepare-client.mjs` copies the Swift generator input, null-only Codable adapter, tokens,
 and link policy into ignored generator inputs. Apple's pinned Swift generator produces
 types and a client during the build, scoped by the checked-in operation allow-list in

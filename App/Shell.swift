@@ -137,6 +137,7 @@ struct DonorShell: View {
                           greeting: profile.publicName,
                           onSwitchToGiving: { selectedTab = .giving },
                           onInvite: { selectedTab = .circle },
+                          onNavigate: { destination = $0 },
                           onSignedOut: onSignedOut)
         } else {
             accountState

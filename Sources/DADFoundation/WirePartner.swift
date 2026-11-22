@@ -246,7 +246,8 @@ public struct WirePartner: PartnerService {
             switch try await client.partnerUsers(.init()) {
             case .ok(let response):
                 return try response.body.json.users.map {
-                    PartnerUser(id: $0.id, email: $0.email, name: $0.name, role: PartnerRole(contract: $0.role))
+                    PartnerUser(id: $0.id, email: $0.email, name: $0.name, role: PartnerRole(contract: $0.role),
+                                accepted: $0.accepted)
                 }
             case .unauthorized: throw AccountError.signedOut
             case .forbidden: throw AccountError.forbidden
@@ -274,7 +275,7 @@ public struct WirePartner: PartnerService {
 
     public func removeUser(id: String) async throws {
         try await perform { client in
-            switch try await client.partnerRemoveUser(.init(path: .init(userID: id), body: .json(.init()))) {
+            switch try await client.partnerRemoveUser(.init(path: .init(user_id: id), body: .json(.init()))) {
             case .ok: return
             case .unauthorized: throw AccountError.signedOut
             case .forbidden: throw AccountError.forbidden

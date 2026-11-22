@@ -40,12 +40,15 @@ struct DonorHomeView: View {
     private let onSwitchToGiving: () -> Void
     /// Switch the shell to the Circle tab (the "Invite someone" primary; Circle owns ShareLink/QR).
     private let onInvite: () -> Void
+    /// Open an account screen a layout's link button names (the shell's deep-link router).
+    private let onNavigate: (AccountDestination) -> Void
     @State private var giftModel: GivingModel?
 
     init(service: any DashboardService, giving: GivingKit? = nil, events: (any EventsService)? = nil,
          engagement: (any EngagementService)? = nil, wallet: (any WalletPassService)? = nil,
          greeting: String? = nil,
          onSwitchToGiving: @escaping () -> Void = {}, onInvite: @escaping () -> Void = {},
+         onNavigate: @escaping (AccountDestination) -> Void = { _ in },
          onSignedOut: @escaping () -> Void) {
         self.giving = giving
         self.events = events
@@ -54,6 +57,7 @@ struct DonorHomeView: View {
         self.greeting = greeting
         self.onSwitchToGiving = onSwitchToGiving
         self.onInvite = onInvite
+        self.onNavigate = onNavigate
         self.onSignedOut = onSignedOut
         _model = State(initialValue: DashboardModel(service: service))
         _giftModel = State(initialValue: giving?.makeModel())
@@ -84,7 +88,7 @@ struct DonorHomeView: View {
                         }
                     }.accessibilityElement(children: .contain).accessibilityIdentifier("dashboard-preparing")
                 case .ready(.ready(let dashboard)):
-                    DashboardCards(dashboard: dashboard, onUpdatePayment: onSwitchToGiving)
+                    DashboardCards(dashboard: dashboard, onUpdatePayment: onSwitchToGiving, onNavigate: onNavigate)
                     // The lone primary on Home: Circle owns the share/QR affordances.
                     Button("Invite someone", action: onInvite)
                         .buttonStyle(DADButtonStyle(.primary)).accessibilityIdentifier("invite-someone")
@@ -179,6 +183,7 @@ private struct DashboardCards: View {
     let dashboard: DonorDashboard
     /// At-risk "Update payment" switches to the Giving tab.
     var onUpdatePayment: () -> Void = {}
+    var onNavigate: (AccountDestination) -> Void = { _ in }
     @ScaledMetric(relativeTo: .largeTitle) private var streakSize: CGFloat = 44
     /// The milestone last acknowledged on this device, so a newly crossed milestone shows the
     /// inline card once (NOT a modal) and fires the success haptic only on first sight.
@@ -214,6 +219,7 @@ private struct DashboardCards: View {
                     }
                 }.accessibilityElement(children: .contain).accessibilityIdentifier("network-card")
             }
+            if let insights = dashboard.insights { InsightsPanelView(panel: insights, onNavigate: onNavigate) }
         }
     }
 
