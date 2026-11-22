@@ -9,7 +9,7 @@ private func failureText(_ message: String, id: String) -> some View {
     Text(message).font(.footnote).foregroundStyle(Color.dad("fail")).accessibilityIdentifier(id)
 }
 
-/// ZIP, city and phone. The ZIP sets the donor's city for events and rankings, and their time zone.
+/// A manual zone corrects ZIP suggestions at regional boundaries.
 struct ProfileDetailsSection: View {
     @State private var model: ProfileDetailsModel
 
@@ -20,11 +20,19 @@ struct ProfileDetailsSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Your details").font(.headline).accessibilityAddTraits(.isHeader)
-            Text("Your ZIP code sets your city for events and rankings, and your time zone.").font(.footnote).foregroundStyle(.secondary)
+            Text("Your ZIP code suggests your time zone. Correct it below if your local midnight differs.").font(.footnote).foregroundStyle(.secondary)
             TextField("ZIP code", text: $model.zip)
                 .textFieldStyle(.roundedBorder).textContentType(.postalCode).keyboardType(.numbersAndPunctuation)
                 .accessibilityIdentifier("details-zip")
             if !model.zipValid { failureText("Enter a 5-digit ZIP code, or leave it empty.", id: "details-zip-hint") }
+            Picker("Streak time zone", selection: $model.timezoneOverride) {
+                ForEach(StreakTimeZone.choices, id: \.value) { choice in
+                    Text(choice.label).tag(choice.value)
+                }
+            }.accessibilityIdentifier("details-timezone")
+            if let zone = model.profile.timezone {
+                Text("Saved streak time zone: \(zone)").font(.footnote).foregroundStyle(.secondary)
+            }
             TextField("City", text: $model.city)
                 .textFieldStyle(.roundedBorder).textContentType(.addressCity).textInputAutocapitalization(.words)
                 .accessibilityIdentifier("details-city")
@@ -70,7 +78,7 @@ struct EmailChangeSection: View {
                 if case .failed(let message) = model.phase { failureText(message, id: "email-change-error") }
                 Button("Send confirmation") { Task { await model.submit() } }
                     .buttonStyle(DADButtonStyle(.primary)).disabled(!model.canSubmit).accessibilityIdentifier("email-change-submit")
-                Button("Cancel") { model.edit(); expanded = false }.buttonStyle(DADButtonStyle(.secondary))
+                Button("Cancel") { model.edit(); expanded = false }.buttonStyle(DADButtonStyle(.secondary)).accessibilityIdentifier("email-change-cancel")
             }
         }
         .accessibilityElement(children: .contain).accessibilityIdentifier("email-change-section")
@@ -123,11 +131,16 @@ struct EmployerSection: View {
         if team.leaderboard.isEmpty {
             Text("Teams appear here once they have five members.").font(.footnote).foregroundStyle(.secondary)
         } else {
+            let ranksVerified = team.leaderboard.allSatisfy(\.metricsVerified)
             ForEach(Array(team.leaderboard.enumerated()), id: \.element.id) { index, row in
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("\(index + 1). \(row.name)").font(.subheadline.bold())
-                    Text("\(row.activeGivers) givers · \(formatUSDMinor(Int(clamping: row.annualizedMinor))) a year · \(row.avgStreakDays)-day average streak")
-                        .font(.caption).foregroundStyle(.secondary)
+                    Text(ranksVerified ? "\(index + 1). \(row.name)" : row.name).font(.subheadline.bold())
+                    if row.metricsVerified {
+                        Text("\(row.activeGivers) givers · \(formatUSDMinor(Int(clamping: row.annualizedMinor))) a year · \(row.avgStreakDays)-day average streak")
+                            .font(.caption).foregroundStyle(.secondary)
+                    } else {
+                        Text("Giving and streak figures are awaiting verification.").font(.caption).foregroundStyle(.secondary)
+                    }
                 }
                 .accessibilityElement(children: .combine).accessibilityIdentifier("leaderboard-\(row.id)")
             }
@@ -138,6 +151,7 @@ struct EmployerSection: View {
 /// Where the donor is signed in: end one other session, every other one, or every session.
 struct SessionsSection: View {
     @State private var model: DeviceSessionsModel
+    @State private var confirmingSignOutEverywhere = false
     let onSignedOut: () -> Void
 
     init(service: any AccountManagementService, onSignedOut: @escaping () -> Void) {
@@ -164,8 +178,24 @@ struct SessionsSection: View {
             }
             if let notice = model.notice { Text(notice).font(.footnote).accessibilityIdentifier("sessions-notice") }
             if let error = model.actionError { failureText(error, id: "sessions-error") }
-            Button("Sign out on every device") { Task { await model.signOutEverywhere() } }
-                .buttonStyle(DADButtonStyle(.secondary)).disabled(model.isBusy).accessibilityIdentifier("sessions-sign-out-everywhere")
+            if confirmingSignOutEverywhere {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Sign out everywhere, including this device?").font(.subheadline)
+                    HStack {
+                        Button("Yes, sign out everywhere") {
+                            confirmingSignOutEverywhere = false
+                            Task { await model.signOutEverywhere() }
+                        }
+                        .buttonStyle(DADButtonStyle(.destructive)).disabled(model.isBusy)
+                        .accessibilityIdentifier("sessions-sign-out-everywhere-confirm")
+                        Button("Keep me signed in") { confirmingSignOutEverywhere = false }.buttonStyle(DADButtonStyle(.secondary))
+                    }
+                }
+                .accessibilityElement(children: .contain).accessibilityIdentifier("sessions-sign-out-everywhere-prompt")
+            } else {
+                Button("Sign out on every device") { confirmingSignOutEverywhere = true }
+                    .buttonStyle(DADButtonStyle(.secondary)).disabled(model.isBusy).accessibilityIdentifier("sessions-sign-out-everywhere")
+            }
         }
         .accessibilityElement(children: .contain).accessibilityIdentifier("sessions-section")
         .task { await model.load() }

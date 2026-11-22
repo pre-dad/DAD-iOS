@@ -9,16 +9,33 @@ import XCTest
         app.launchInForeground()
 
         // Welcome is the unauthenticated entry point; its sign-in path reaches the methods.
-        XCTAssertTrue(app.buttons["I already give — sign in"].waitForExistence(timeout: 10))
-        app.buttons["I already give — sign in"].tap()
+        app.buttons["I already give — sign in"].tapWhenReady()
 
         // Sign-in method picker: phone is the primary, labelled "Continue with phone".
-        XCTAssertTrue(app.buttons["Continue with phone"].waitForExistence(timeout: 10))
-        app.buttons["Continue with phone"].tap()
+        app.buttons["Continue with phone"].tapWhenReady()
 
         // Phone + SMS code screen renders with its phone field.
         XCTAssertTrue(app.staticTexts["Sign in with your phone"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.textFields["Phone number"].exists)
+        app.buttons["Back"].tap()
+        XCTAssertTrue(app.buttons["Continue with phone"].waitForExistence(timeout: 5), "a donor can choose another sign-in method")
+    }
+
+    /// Signup's Back returns to wherever signup was opened from: Welcome for "Give $1 a day", the
+    /// sign-in methods for "Get started".
+    func testSignupBackReturnsToWhereItWasOpenedFrom() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--preview-signed-out"]
+        app.launchInForeground()
+
+        app.buttons["Give $1 a day"].tapWhenReady()
+        app.buttons["signup-back"].tapWhenReady()
+        XCTAssertTrue(app.buttons["Give $1 a day"].waitForExistence(timeout: 5), "Back from a signup begun on Welcome returns to Welcome")
+
+        app.buttons["I already give — sign in"].tapWhenReady()
+        app.buttons["create-account"].tapWhenReady()
+        app.buttons["signup-back"].tapWhenReady()
+        XCTAssertTrue(app.buttons["Continue with phone"].waitForExistence(timeout: 5), "Back from Get started returns to the sign-in methods")
     }
 
     /// A valid phone number advances to code entry, and Send code stays disabled for junk input.
@@ -27,15 +44,14 @@ import XCTest
         app.launchArguments = ["--preview-signed-out"]
         app.launchInForeground()
 
-        app.buttons["I already give — sign in"].tap()
-        XCTAssertTrue(app.buttons["Continue with phone"].waitForExistence(timeout: 10))
-        app.buttons["Continue with phone"].tap()
+        app.buttons["I already give — sign in"].tapWhenReady()
+        app.buttons["Continue with phone"].tapWhenReady()
 
         let phone = app.textFields["Phone number"]
         XCTAssertTrue(phone.waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["Send code"].isEnabled)
         phone.tap()
-        phone.typeText("+14155551234")
+        phone.typeText("4155551234")
         XCTAssertTrue(app.buttons["Send code"].isEnabled)
         app.buttons["Send code"].tap()
 
@@ -54,7 +70,7 @@ import XCTest
         app.launchArguments = ["--preview-signed-out"]
         app.launchInForeground()
 
-        app.buttons["I already give — sign in"].tap()
+        app.buttons["I already give — sign in"].tapWhenReady()
         XCTAssertTrue(app.buttons["Continue with phone"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["Continue with phone"].isEnabled)
         XCTAssertFalse(app.buttons["Sign in with Apple"].exists, "unavailable methods are not listed")

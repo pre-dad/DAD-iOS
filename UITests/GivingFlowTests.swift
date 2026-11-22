@@ -4,6 +4,21 @@ import XCTest
 /// dedicated preview arg that doesn't disturb the signed-in donor-landing tests) and
 /// exercises the $1–$30/day stepper and the cancel confirmation.
 @MainActor final class GivingFlowTests: XCTestCase {
+    func testGiftFramingInLightAndDarkAppearance() {
+        for appearance in ["Light", "Dark"] {
+            let app = XCUIApplication()
+            app.launchArguments = ["--preview-giving"] + (appearance == "Dark" ? ["--preview-dark"] : [])
+            app.launchInForeground()
+            XCTAssertTrue(app.staticTexts["gift-daily"].waitForExistence(timeout: 10))
+            XCTAssertTrue(app.buttons["save-gift"].exists)
+            XCTAssertLessThan(app.buttons["amount-other"].frame.height, 80, "amount choices must not wrap one letter per line")
+            let screenshot = XCTAttachment(screenshot: app.screenshot())
+            screenshot.name = "Giving \(appearance)"
+            screenshot.lifetime = .keepAlways
+            add(screenshot)
+        }
+    }
+
     func testSetGiftScreenRendersAndSteps() {
         let app = XCUIApplication()
         app.launchArguments = ["--preview-giving"]

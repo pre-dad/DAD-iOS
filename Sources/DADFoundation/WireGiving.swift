@@ -191,8 +191,6 @@ public struct WireGiving: GivingService {
         }
     }
 
-    // MARK: - helpers
-
     private func command<T: Sendable>(_ fingerprint: String, _ run: (String) async throws -> T) async throws -> T {
         let key = ledger.key(for: fingerprint)
         do {

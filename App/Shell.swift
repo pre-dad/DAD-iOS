@@ -13,7 +13,7 @@ enum DonorTab: Hashable { case home, circle, events, giving }
 
 /// The signed-in donor shell: a `TabView` of four `NavigationStack`s (Home, Circle, Events, Giving),
 /// a per-tab toolbar avatar that opens Settings as a sheet, and the deep-link/notification router that
-/// selects a tab (and pushes gift history for `.gifts`). Replaces the former scrolling `DonorLanding`.
+/// selects a tab (and pushes gift history for `.gifts`).
 struct DonorShell: View {
     let model: AccountModel
     @Binding var destination: AccountDestination?
@@ -28,7 +28,7 @@ struct DonorShell: View {
     init(model: AccountModel, destination: Binding<AccountDestination?>) {
         self.model = model
         _destination = destination
-        // DEBUG screenshot/UITest aids: open straight onto a tab (replaces the old auto-opened sheets).
+        // DEBUG screenshot/UITest aids: open straight onto a tab.
         let initial: DonorTab = launchFlag("--stub-open-engagement") ? .circle
             : launchFlag("--stub-open-events") ? .events
             : launchFlag("--stub-open-gift") ? .giving : .home
@@ -80,7 +80,7 @@ struct DonorShell: View {
             .tabItem { Label("Giving", systemImage: "heart.fill") }
             .tag(DonorTab.giving)
         }
-        .tint(tokenColor("brand-ink"))
+        .tint(Color.dad("brand-ink"))
         .task(id: destinationKey) { route(destination) }
         .sheet(isPresented: $showSettings) {
             if let service = model.makeSettings() {
@@ -110,8 +110,10 @@ struct DonorShell: View {
             Button { showSettings = true } label: {
                 Text(avatarInitial).font(.subheadline.weight(.semibold))
                     .frame(width: avatarSize, height: avatarSize)
-                    .background(tokenColor("brand").opacity(0.18), in: Circle())
-                    .overlay(Circle().strokeBorder(tokenColor("brand-ink").opacity(0.4)))
+                    .background(Color.dad("brand").opacity(0.18), in: Circle())
+                    .overlay(Circle().strokeBorder(Color.dad("brand-ink").opacity(0.4)))
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .accessibilityLabel("Account and settings")
             .accessibilityAddTraits(.isButton)
@@ -132,10 +134,10 @@ struct DonorShell: View {
         if case .ready(let profile) = model.state, let dashboard = model.dashboardService {
             DonorHomeView(service: dashboard, giving: model.givingKit, events: model.eventsService,
                           engagement: model.engagementService, wallet: model.walletService,
-                          greeting: profile.publicName, preview: model.preview,
+                          greeting: profile.publicName,
                           onSwitchToGiving: { selectedTab = .giving },
                           onInvite: { selectedTab = .circle },
-                          destination: $destination, onSignedOut: onSignedOut)
+                          onSignedOut: onSignedOut)
         } else {
             accountState
         }
@@ -186,7 +188,7 @@ struct DonorShell: View {
     }
 
     /// Loading / unavailable / signed-out: the synthetic preview and the retry path reach these before a
-    /// service exists. Carries the same copy and `account-state` identifier the former landing used.
+    /// service exists. Carries the `account-state` identifier the UITests query.
     @ViewBuilder private var accountState: some View {
         Group {
             switch model.state {
@@ -253,6 +255,6 @@ struct SettingsSheet: View {
                     Button("Done", action: onClose).accessibilityIdentifier("settings-close")
                 }
             }
-        }.tint(tokenColor("brand-ink"))
+        }.tint(Color.dad("brand-ink"))
     }
 }

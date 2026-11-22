@@ -1,3 +1,4 @@
+import ImageIO
 import PhotosUI
 import SwiftUI
 import DADFoundation
@@ -126,7 +127,6 @@ private struct ApplicationStatusCard: View {
     @State var model: ApplicationStatusModel
     /// Whether this install holds an application that is still shown, so the sign-in screen can stop offering to apply.
     var onHolds: (Bool) -> Void = { _ in }
-    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         // A container, not a bare Group: `.task` on the empty initial state would never run.
@@ -138,7 +138,7 @@ private struct ApplicationStatusCard: View {
                     Text(info.message).accessibilityIdentifier("partner-application-message")
                 }
                 .padding(16).frame(maxWidth: .infinity, alignment: .leading)
-                .background(scheme == .dark ? Color.dad("ink") : Color.dad("line").opacity(0.35), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .dadPanel()
                 .accessibilityElement(children: .contain).accessibilityIdentifier("partner-application-status")
             case .failed(let message):
                 VStack(alignment: .leading, spacing: 8) {
@@ -210,6 +210,9 @@ struct PartnerPortal: View {
     var pushToken: String?
     let onSignedOut: () -> Void
     @State private var section: Section = .overview
+    @State private var organizationDraft: OrganizationDraft?
+    /// Decoded once when the logo changes, not on every render.
+    @State private var logoImage: UIImage?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -243,7 +246,7 @@ struct PartnerPortal: View {
                     case .initiatives: PartnerInitiativesSection(initiatives: model.initiatives)
                     case .people: PartnerPeopleSection(people: model.people, teams: model.teams)
                     case .organization:
-                        PartnerOrganizationSection(model: model, overview: overview, publicOrigin: publicOrigin)
+                        PartnerOrganizationSection(model: model, overview: overview, publicOrigin: publicOrigin, draft: $organizationDraft)
                     }
                 }
             }
@@ -253,11 +256,12 @@ struct PartnerPortal: View {
         .task { await model.load() }
         .task(id: pushToken) { if let pushToken { await model.registerPush(token: pushToken, environment: .ofThisBuild) } }
         .onChange(of: model.signedOut) { _, out in if out { onSignedOut() } }
+        .onChange(of: model.logo, initial: true) { _, data in logoImage = data.flatMap { UIImage(data: $0) } }
     }
 
     private var header: some View {
         HStack(spacing: 12) {
-            if let data = model.logo, let image = UIImage(data: data) {
+            if let image = logoImage {
                 Image(uiImage: image).resizable().scaledToFit().frame(width: 44, height: 44)
                     .accessibilityLabel("Organization logo").accessibilityIdentifier("partner-logo")
             }
@@ -340,8 +344,9 @@ private struct PartnerPeopleSection: View {
                     Text("Enrolled: \(people.enrolled) of \(people.workforceSize)")
                     if let given = people.givenLabel { Text("Given: \(given)").accessibilityIdentifier("partner-given") }
                     if let matched = people.matchedLabel { Text("Matched: \(matched)") }
-                    Text("Average streak: \(people.avgStreakDays) days")
-                    Text("Volunteered: \(people.volunteerMinutes / 60) hours")
+                    if people.streakVerified { Text("Average streak: \(people.avgStreakDays) days") }
+                    else { Text("Streak figures are awaiting verification.") }
+                    Text("Volunteered: \(VolunteerTime.label(minutes: people.volunteerMinutes))")
                 }
             }
         }
@@ -349,12 +354,30 @@ private struct PartnerPeopleSection: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Teams").font(.title3.bold()).accessibilityAddTraits(.isHeader)
                 Text("Teams with fewer than 5 people are left out.").font(.footnote).foregroundStyle(.secondary)
+                let ranksVerified = teams.allSatisfy(\.metricsVerified)
                 ForEach(Array(teams.enumerated()), id: \.element.id) { index, team in
-                    Text("\(index + 1). \(team.name) · \(team.activeGivers) givers · \(formatUSDMinor(Int(team.annualizedMinor)))/yr")
-                        .accessibilityIdentifier("partner-team-\(team.id)")
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(ranksVerified ? "\(index + 1). \(team.name)" : team.name)
+                        if team.metricsVerified {
+                            Text("\(team.activeGivers) givers · \(formatUSDMinor(Int(team.annualizedMinor)))/yr")
+                        } else { Text("Giving and streak figures are awaiting verification.") }
+                        Text("Volunteered: \(VolunteerTime.label(minutes: team.volunteerMinutes))")
+                    }.accessibilityElement(children: .combine).accessibilityIdentifier("partner-team-\(team.id)")
                 }
             }
         }
+    }
+}
+
+/// The profile editor's unsaved text. The portal owns it so switching sections does not discard edits.
+private struct OrganizationDraft: Equatable {
+    var organization: String
+    var about: String
+    var workforce: String
+    init(_ overview: PartnerOverview) {
+        organization = overview.organization
+        about = overview.description
+        workforce = String(overview.workforceSize)
     }
 }
 
@@ -362,9 +385,10 @@ private struct PartnerOrganizationSection: View {
     let model: PartnerModel
     let overview: PartnerOverview
     let publicOrigin: URL?
+    @Binding var draft: OrganizationDraft?
 
     var body: some View {
-        PartnerProfileEditor(model: model, overview: overview)
+        PartnerProfileEditor(model: model, overview: overview, draft: $draft)
         PartnerCompanyCode(code: overview.companyCode, publicOrigin: publicOrigin)
         PartnerUsersSection(model: model)
         if model.role.canExport { PartnerReportsSection(model: model) }
@@ -376,25 +400,28 @@ private struct PartnerOrganizationSection: View {
 private struct PartnerProfileEditor: View {
     let model: PartnerModel
     let overview: PartnerOverview
-    @State private var organization = ""
-    @State private var about = ""
-    @State private var workforce = ""
+    @Binding var draft: OrganizationDraft?
     @State private var photo: PhotosPickerItem?
+
+    /// Reads the server's values until the person types; from then on the text is theirs.
+    private var fields: Binding<OrganizationDraft> {
+        Binding(get: { draft ?? OrganizationDraft(overview) }, set: { draft = $0 })
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Organization").font(.title3.bold()).accessibilityAddTraits(.isHeader)
             if model.role.canEditProfile {
-                TextField("Organization name", text: $organization)
+                TextField("Organization name", text: fields.organization)
                     .textFieldStyle(.roundedBorder).accessibilityIdentifier("partner-profile-name")
-                TextField("Description", text: $about, axis: .vertical)
+                TextField("Description", text: fields.about, axis: .vertical)
                     .lineLimit(3...8).textFieldStyle(.roundedBorder).accessibilityIdentifier("partner-profile-description")
-                Button("Save profile") { Task { await model.saveProfile(organization: organization, description: about) } }
+                Button("Save profile") { Task { await model.saveProfile(organization: fields.wrappedValue.organization, description: fields.wrappedValue.about) } }
                     .buttonStyle(DADButtonStyle(.primary)).disabled(model.isBusy).accessibilityIdentifier("partner-profile-save")
-                TextField("Number of employees", text: $workforce)
+                TextField("Number of employees", text: fields.workforce)
                     .textFieldStyle(.roundedBorder).keyboardType(.numberPad).accessibilityIdentifier("partner-workforce")
                 Text("Enrollment percentages are measured against this headcount.").font(.footnote).foregroundStyle(.secondary)
-                Button("Save workforce size") { Task { await model.saveWorkforce(workforce) } }
+                Button("Save workforce size") { Task { await model.saveWorkforce(fields.wrappedValue.workforce) } }
                     .buttonStyle(DADButtonStyle(.secondary)).disabled(model.isBusy).accessibilityIdentifier("partner-workforce-save")
                 HStack {
                     PhotosPicker(model.logo == nil ? "Add logo" : "Change logo", selection: $photo, matching: .images)
@@ -410,11 +437,6 @@ private struct PartnerProfileEditor: View {
                 if !overview.description.isEmpty { Text(overview.description) }
                 Text("Employees: \(overview.workforceSize)").font(.footnote)
             }
-        }
-        .onAppear {
-            organization = overview.organization
-            about = overview.description
-            workforce = String(overview.workforceSize)
         }
         .onChange(of: photo) { _, item in
             guard let item else { return }
@@ -433,15 +455,20 @@ private struct PartnerProfileEditor: View {
 /// Scales a picked image to the server's logo limits: a PNG no larger than 512 by 512 pixels and 256 KiB.
 enum LogoImage {
     static func png(from data: Data) -> Data? {
-        guard let image = UIImage(data: data), image.size.width > 0, image.size.height > 0 else { return nil }
-        var side: CGFloat = 512
+        // Decode straight to a thumbnail so a full-resolution photo is never held as a bitmap.
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? Int, let height = properties[kCGImagePropertyPixelHeight] as? Int,
+              width > 0, height > 0 else { return nil }
+        var side = min(512, max(width, height))
         while side >= 64 {
-            let scale = min(1, side / max(image.size.width, image.size.height))
-            let size = CGSize(width: (image.size.width * scale).rounded(.down), height: (image.size.height * scale).rounded(.down))
-            let format = UIGraphicsImageRendererFormat()
-            format.scale = 1
-            let png = UIGraphicsImageRenderer(size: size, format: format).pngData { _ in image.draw(in: CGRect(origin: .zero, size: size)) }
-            if png.count <= 256 * 1024 { return png }
+            let options: [CFString: Any] = [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: side,
+            ]
+            guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+            if let png = UIImage(cgImage: image).pngData(), png.count <= 256 * 1024 { return png }
             side /= 2
         }
         return nil
@@ -456,7 +483,8 @@ private struct PartnerCompanyCode: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Company code").font(.title3.bold()).accessibilityAddTraits(.isHeader)
             Text(code).font(.title2.monospaced().bold()).accessibilityIdentifier("partner-company-code")
-            if let publicOrigin, let link = URL(string: "c/\(code)", relativeTo: publicOrigin)?.absoluteURL {
+            if let publicOrigin {
+                let link = publicOrigin.appending(path: "c").appending(path: code)
                 if let qr = qrCodeImage(link.absoluteString, scale: 8) {
                     Image(uiImage: qr).interpolation(.none).resizable().frame(width: 160, height: 160)
                         .accessibilityLabel("QR code for \(link.absoluteString)").accessibilityIdentifier("partner-company-qr")

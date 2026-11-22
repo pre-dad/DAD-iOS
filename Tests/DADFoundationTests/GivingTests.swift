@@ -38,6 +38,11 @@ final class GiftAmountTests: XCTestCase {
         XCTAssertEqual(formatUSDMinor(15000), "$150")
         XCTAssertEqual(formatUSDMinor(1234), "$12.34")
         XCTAssertEqual(formatUSDMinor(0), "$0")
+        XCTAssertEqual(formatUSDMinor(-1234), "-$12.34")
+        XCTAssertEqual(formatUSDMinor(-5), "-$0.05")
+        XCTAssertEqual(formatUSDMinor(-124_000), "-$1,240")
+        XCTAssertEqual(formatUSDMinor(5), "$0.05")
+        XCTAssertTrue(formatUSDMinor(Int.min).hasPrefix("-$"))
     }
 }
 

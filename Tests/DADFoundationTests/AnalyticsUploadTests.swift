@@ -20,6 +20,7 @@ final class AnalyticsUploadTests: XCTestCase {
         XCTAssertEqual(observed(.post, "/donor/me/events/check-in"), [.eventCheckedIn])
         XCTAssertEqual(observed(.get, "/donor/me/events/e1"), [.eventViewed])
         XCTAssertEqual(observed(.get, "/events/e1"), [.eventViewed])
+        XCTAssertEqual(observed(.get, "/donor/me/events/invite-only"), [], "the invite-only list is not one event's page")
         XCTAssertEqual(observed(.get, "/donor/partner/report.pdf"), [.partnerReportExported])
         XCTAssertEqual(observed(.post, "/donor/me/events/e1/reserve", response: #"{"status":"RESERVED"}"#), [.eventReserved])
         XCTAssertEqual(observed(.post, "/donor/me/events/e1/reserve", response: #"{"status":"WAITLISTED"}"#), [.eventWaitlisted])
@@ -112,16 +113,33 @@ final class AnalyticsUploadTests: XCTestCase {
         XCTAssertNil(analytics.choice)
         analytics.choose(true)
         XCTAssertEqual(consent.choice, true)
-        for _ in 0..<200 where transport.calls(to: "/analytics/events").isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        await eventually { !transport.calls(to: "/analytics/events").isEmpty }
         XCTAssertEqual(transport.calls(to: "/analytics/events").count, 1)
         analytics.choose(false)
-        for _ in 0..<200 where await analytics.pending > 0 { try await Task.sleep(for: .milliseconds(10)) }
+        await eventually { await analytics.pending == 0 }
         let left = await analytics.pending
         XCTAssertEqual(left, 0)
         analytics.emit(.irlCodeShown)   // declined: dropped synchronously, nothing queued to send
         let after = await analytics.pending
         XCTAssertEqual(after, 0)
         XCTAssertEqual(transport.calls(to: "/analytics/events").count, 1)
+    }
+
+    @MainActor
+    func testEventsRecordedAfterReconsentSurviveTheEarlierDecline() async throws {
+        struct FailingSink: AnalyticsSink {
+            func send(_ batch: AnalyticsBatch) async throws { throw AccountError.unavailable }
+        }
+        let analytics = AnalyticsController(consent: MemoryAnalyticsConsent(choice: true), sink: FailingSink())
+        analytics.emit(.roleSelected)
+        await eventually { await analytics.pending != 0 }
+        for _ in 0..<50 {
+            analytics.choose(false)
+            analytics.choose(true)
+        }
+        try await Task.sleep(for: .milliseconds(200))
+        let kept = await analytics.pending
+        XCTAssertGreaterThan(kept, 0, "a decline's discard must not drop events recorded after the donor allowed analytics again")
     }
 
     func testTheChoiceIsRememberedInDefaults() throws {
@@ -133,6 +151,36 @@ final class AnalyticsUploadTests: XCTestCase {
         XCTAssertEqual(DefaultsAnalyticsConsent(defaults: defaults).choice, false)
         consent.choice = true
         XCTAssertEqual(DefaultsAnalyticsConsent(defaults: defaults).choice, true)
+    }
+
+    @MainActor func testRevokingConsentStopsQueuedBatchesWhileAnUploadIsInFlight() async throws {
+        actor SlowSink: AnalyticsSink {
+            let entered = Gate()
+            let release = Gate()
+            private(set) var calls = 0
+            func send(_ batch: AnalyticsBatch) async throws {
+                calls += 1
+                await entered.release()
+                await release.pass()
+            }
+        }
+        let sink = SlowSink()
+        let consent = MemoryAnalyticsConsent(choice: true)
+        let analytics = AnalyticsController(consent: consent, sink: sink)
+        analytics.emit(.appOpened)
+        await sink.entered.pass()
+        for _ in 0..<200 { analytics.emit(.roleSelected) }
+        await eventually { await analytics.pending >= 201 }
+        let queued = await analytics.pending
+        XCTAssertEqual(queued, 201)
+        analytics.choose(false)
+        await sink.release.release()
+        await eventually { await analytics.pending == 0 }
+        try await analytics.flush()
+        let remaining = await analytics.pending
+        let calls = await sink.calls
+        XCTAssertEqual(remaining, 0)
+        XCTAssertEqual(calls, 1, "only the upload already started before revocation may finish")
     }
 }
 

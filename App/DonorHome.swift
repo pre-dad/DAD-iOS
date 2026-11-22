@@ -23,39 +23,35 @@ private func homeHeaderDate(_ date: Date = Date()) -> String {
     return f.string(from: date)
 }
 
+enum DonorDefaults {
+    static let lastSeenMilestone = "dad.lastSeenMilestone"
+}
+
 struct DonorHomeView: View {
     @State private var model: DashboardModel
     let onSignedOut: () -> Void
-    private let service: any DashboardService
     private let giving: GivingKit?
     private let events: (any EventsService)?
     private let engagement: (any EngagementService)?
     private let wallet: (any WalletPassService)?
     /// The donor's public name for the "Hi, …" greeting the home shows (nil → "Welcome back").
     private let greeting: String?
-    private let preview: Bool
     /// Switch the shell to the Giving tab (at-risk "Update payment" and the monthly-gift row).
     private let onSwitchToGiving: () -> Void
     /// Switch the shell to the Circle tab (the "Invite someone" primary; Circle owns ShareLink/QR).
     private let onInvite: () -> Void
     @State private var giftModel: GivingModel?
-    /// A screen a tapped notification asked for. Routing now lives in the shell (tab + push); the
-    /// binding stays so Home can be constructed with the same signature.
-    @Binding private var destination: AccountDestination?
 
     init(service: any DashboardService, giving: GivingKit? = nil, events: (any EventsService)? = nil,
          engagement: (any EngagementService)? = nil, wallet: (any WalletPassService)? = nil,
-         greeting: String? = nil, preview: Bool = false,
+         greeting: String? = nil,
          onSwitchToGiving: @escaping () -> Void = {}, onInvite: @escaping () -> Void = {},
-         destination: Binding<AccountDestination?> = .constant(nil), onSignedOut: @escaping () -> Void) {
-        _destination = destination
-        self.service = service
+         onSignedOut: @escaping () -> Void) {
         self.giving = giving
         self.events = events
         self.engagement = engagement
         self.wallet = wallet
         self.greeting = greeting
-        self.preview = preview
         self.onSwitchToGiving = onSwitchToGiving
         self.onInvite = onInvite
         self.onSignedOut = onSignedOut
@@ -186,7 +182,7 @@ private struct DashboardCards: View {
     @ScaledMetric(relativeTo: .largeTitle) private var streakSize: CGFloat = 44
     /// The milestone last acknowledged on this device, so a newly crossed milestone shows the
     /// inline card once (NOT a modal) and fires the success haptic only on first sight.
-    @AppStorage("dad.lastSeenMilestone") private var lastSeenMilestone = 0
+    @AppStorage(DonorDefaults.lastSeenMilestone) private var lastSeenMilestone = 0
     @State private var milestoneDismissed = false
 
     /// The milestone the streak has crossed but this device hasn't acknowledged yet, if any.
@@ -245,7 +241,7 @@ private struct DashboardCards: View {
     /// Milestone-reached (streak crossed a milestone since last launch): a dismissible inline card with
     /// a share action — NOT a modal. First sight also fires the success haptic.
     @ViewBuilder private func milestoneCard(_ reached: Int) -> some View {
-        let message = "\(reached) days. That’s a month of aid, on the record."
+        let message = milestoneLine(days: reached)
         DADCard {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top) {
@@ -390,7 +386,6 @@ private struct InitiativeCard: View {
 struct GiftHistoryScreen: View {
     @State private var model: GiftHistoryModel
     let onSignedOut: () -> Void
-    @Environment(\.colorScheme) private var scheme
 
     init(service: any DashboardService, onSignedOut: @escaping () -> Void) {
         self.onSignedOut = onSignedOut
@@ -406,7 +401,9 @@ struct GiftHistoryScreen: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("\(String(summary.year)) total").font(.footnote).foregroundStyle(.secondary)
                             Text(summary.netLabel).font(.title2.bold()).accessibilityIdentifier("history-year-total")
-                            Text("Sandbox records, not tax receipts.").font(.caption).foregroundStyle(.secondary)
+                            if !summary.taxReceipt {
+                                Text("Sandbox records, not tax receipts.").font(.caption).foregroundStyle(.secondary)
+                            }
                         }
                     }
                 }
@@ -500,7 +497,7 @@ struct GiftHistoryScreen: View {
                 }
             }
             .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-            .background(scheme == .dark ? Color.dad("ink") : Color.dad("line").opacity(0.35), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .dadPanel()
             .accessibilityElement(children: .contain).accessibilityIdentifier("receipt-detail")
         case nil:
             EmptyView()

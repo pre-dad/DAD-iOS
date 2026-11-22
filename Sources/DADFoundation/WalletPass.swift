@@ -16,6 +16,7 @@ public protocol WalletPassService: Sendable {
 @Observable
 public final class WalletPassModel {
     public static let failure = "The Wallet pass couldn’t be prepared. Please try again. Your on-screen code still works."
+    public static let throttled = "\(AccountError.rateLimited.userMessage) Your on-screen code still works."
 
     /// nil until checked, or when the check failed.
     public private(set) var available: Bool?
@@ -42,6 +43,7 @@ public final class WalletPassModel {
         error = nil
         do { pass = try await service.applePass() }
         catch where error.isCancellation { return }
+        catch AccountError.rateLimited { self.error = Self.throttled }
         catch { self.error = Self.failure }
     }
 

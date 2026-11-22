@@ -21,9 +21,9 @@ public struct WireAccountSettings: AccountSettingsService {
     }
 
     public func load() async throws -> AccountSettingsSnapshot {
-        try await product.perform { client in
+        try await product.call { client in
             switch try await client.profile(.init()) {
-            case .ok(let response): return try Self.snapshot(response.body.json)
+            case .ok(let response): return Self.snapshot(try response.body.json)
             case .unauthorized: throw AccountError.signedOut
             case .tooManyRequests: throw AccountError.rateLimited
             default: throw AccountError.unavailable
@@ -33,12 +33,11 @@ public struct WireAccountSettings: AccountSettingsService {
 
     public func savePreferences(_ p: AccountPreferences) async throws -> AccountSettingsSnapshot {
         let body = Self.preferencesBody(p)
-        return try await product.perform { client in
+        return try await product.call { client in
             switch try await client.savePreferences(.init(body: .json(body))) {
-            case .ok(let response): return try Self.snapshot(response.body.json)
+            case .ok(let response): return Self.snapshot(try response.body.json)
             case .unauthorized: throw AccountError.signedOut
-            // Stale `version`: the caller must re-read; surfaced as unavailable so the model shows retry.
-            case .conflict: throw AccountError.unavailable
+            case .conflict: throw AccountError.conflict
             case .tooManyRequests: throw AccountError.rateLimited
             default: throw AccountError.unavailable
             }
@@ -46,7 +45,7 @@ public struct WireAccountSettings: AccountSettingsService {
     }
 
     public func deleteAccount() async throws {
-        try await product.perform { client in
+        try await product.call { client in
             switch try await client.deleteAccount(.init()) {
             case .ok: return
             case .unauthorized: throw AccountError.signedOut
@@ -84,9 +83,9 @@ public struct WireAccountSettings: AccountSettingsService {
             push_gift_processed: p.pushGiftProcessed)
     }
 
-    static func snapshot(_ p: Components.Schemas.Profile) throws -> AccountSettingsSnapshot {
+    static func snapshot(_ p: Components.Schemas.Profile) -> AccountSettingsSnapshot {
         AccountSettingsSnapshot(
-            profile: AccountProfileSummary(email: p.email, accountRole: p.account_role.rawValue, zip: p.zip, city: p.city, phone: p.phone),
+            profile: AccountProfileSummary(email: p.email, accountRole: p.account_role.rawValue, zip: p.zip, city: p.city, phone: p.phone, timezone: p.timezone, timezoneOverride: p.timezone_override),
             preferences: AccountPreferences(
                 version: Int(p.version), referralEmails: p.referral_emails, marketingEmails: p.marketing_emails,
                 pushReferralConverted: p.push_referral_converted, pushStreakAtRisk: p.push_streak_at_risk,

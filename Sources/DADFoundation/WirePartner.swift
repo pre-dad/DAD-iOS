@@ -16,10 +16,14 @@ public actor PartnerSession {
 
     public init(store: any CredentialStore, now: @escaping @Sendable () -> Date = Date.init) throws {
         self.store = store; self.now = now
-        stored = try store.load()
+        do { stored = try store.load() }
+        catch is DecodingError {
+            try store.clear()
+            stored = nil
+        }
     }
 
-    public var isSignedIn: Bool { (try? token()) != nil }
+    public var isSignedIn: Bool { stored.map { $0.expiresAt > now() } ?? false }
 
     func install(token: String) throws {
         let credentials = Credentials(access: token, refresh: "", expiresAt: now().addingTimeInterval(Self.lifetime))
@@ -68,18 +72,6 @@ public actor PartnerSession {
         epoch += 1
         stored = nil
         try store.clear()
-    }
-}
-
-/// Runs one partner call and maps a 4xx/5xx the generated client could not decode (the ingress limiter's 429
-/// has no Problem body) by its status, exactly as a documented response would be. Cancellation is never remapped.
-func mappingUndecodableStatus<T: Sendable>(_ work: () async throws -> T) async throws -> T {
-    do { return try await work() }
-    catch let error as ClientError {
-        if let status = error.response?.status.code, status >= 400, !error.underlyingError.isCancellation {
-            throw AccountError.forStatus(status)
-        }
-        throw error
     }
 }
 
@@ -188,7 +180,9 @@ public struct WirePartner: PartnerService {
                     PartnerInitiative(
                         id: i.id, title: i.title, summary: i.summary, status: InitiativeStatus(contract: i.status),
                         region: i.region, committedMinor: i.committed_minor, deployedMinor: i.deployed_minor,
-                        metrics: i.metrics.map { PartnerMetric(label: $0.label, value: $0.value, unit: PartnerMetric.Unit(contract: $0.unit)) })
+                        metrics: i.metrics.compactMap { metric in
+                            PartnerMetric.Unit(contract: metric.unit).map { PartnerMetric(label: metric.label, value: metric.value, unit: $0) }
+                        })
                 }
             case .unauthorized: throw AccountError.signedOut
             case .forbidden: throw AccountError.forbidden
@@ -220,7 +214,7 @@ public struct WirePartner: PartnerService {
                 let p = try response.body.json
                 return PartnerPeople(enrolled: p.enrolled, workforceSize: p.workforce_size, givenMinor: p.given_minor,
                                      matchedMinor: p.matched_minor, avgStreakDays: p.avg_streak_days,
-                                     volunteerMinutes: p.volunteer_minutes, teams: p.teams, suppressed: p.suppressed)
+                                     volunteerMinutes: p.volunteer_minutes, teams: p.teams, suppressed: p.suppressed, streakVerified: p.streak_verified)
             case .unauthorized: throw AccountError.signedOut
             case .forbidden: throw AccountError.forbidden
             case .tooManyRequests: throw AccountError.rateLimited
@@ -236,7 +230,7 @@ public struct WirePartner: PartnerService {
             case .ok(let response):
                 return try response.body.json.teams.map {
                     TeamStanding(id: $0.team_id, name: $0.name, activeGivers: $0.active_givers, annualizedMinor: $0.annualized_minor,
-                                 avgStreakDays: $0.avg_streak_days, volunteerMinutes: $0.volunteer_minutes)
+                                 avgStreakDays: $0.avg_streak_days, volunteerMinutes: $0.volunteer_minutes, metricsVerified: $0.metrics_verified)
                 }
             case .unauthorized: throw AccountError.signedOut
             case .forbidden: throw AccountError.forbidden
@@ -379,7 +373,13 @@ public struct WirePartner: PartnerService {
             case .ok(let response): return Data(try await ArraySlice<UInt8>(collecting: response.body.pdf, upTo: 16 * 1_048_576))
             case .unauthorized: throw AccountError.signedOut
             case .forbidden: throw AccountError.forbidden
-            case .tooManyRequests: throw AccountError.rateLimited
+            case .conflict(let response):
+                if (try? response.body.json.code) == "PARTNER_REPORT_STORAGE_LIMIT" { throw PartnerReportLimit.storage }
+                throw AccountError.conflict
+            case .contentTooLarge: throw PartnerReportLimit.tooLarge
+            case .tooManyRequests(let response):
+                if (try? response.body.json.code) == "PARTNER_REPORT_DAILY_LIMIT" { throw PartnerReportLimit.daily }
+                throw AccountError.rateLimited
             case .undocumented(let status, _): throw AccountError.forStatus(status)
             default: throw AccountError.unavailable
             }
@@ -416,6 +416,7 @@ public struct WirePartner: PartnerService {
             case .ok: return
             case .unauthorized: throw AccountError.signedOut
             case .unprocessableContent: throw AccountError.invalidInput
+            case .tooManyRequests: throw AccountError.rateLimited
             case .undocumented(let status, _): throw AccountError.forStatus(status)
             default: throw AccountError.unavailable
             }
@@ -427,6 +428,7 @@ public struct WirePartner: PartnerService {
             switch try await client.partnerUnregisterPushDevice(.init()) {
             case .ok: return
             case .unauthorized: throw AccountError.signedOut
+            case .tooManyRequests: throw AccountError.rateLimited
             case .undocumented(let status, _): throw AccountError.forStatus(status)
             default: throw AccountError.unavailable
             }

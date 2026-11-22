@@ -102,7 +102,7 @@ final class WireAuthTests: XCTestCase {
         let store = MemoryStore(nil)
         let session = try AccountSession(api: ControlledAPI(), store: store)
         let auth = WireAuth(origin: testOrigin, transport: transport)
-        do { _ = try await session.establish { try await auth.verifyPhone(handle: "+1", code: "000000") }; XCTFail() }
+        do { _ = try await session.establish { try await auth.verifyPhone(handle: "+1", code: "000000") }; XCTFail("verifyPhone must throw") }
         catch { XCTAssertEqual(error as? AccountError, .signedOut) }
         XCTAssertNil(try store.load())
         XCTAssertEqual(store.saves, 0)
@@ -153,14 +153,14 @@ final class SessionAuthorizedTests: XCTestCase {
         let task = Task { try await session.authorized { _ -> String in throw AccountError.signedOut } }
         await api.waitForRefresh()
         await api.finishRefresh()
-        do { _ = try await task.value; XCTFail() } catch { XCTAssertEqual(error as? AccountError, .signedOut) }
+        do { _ = try await task.value; XCTFail("the failed refresh must surface to its waiter") } catch { XCTAssertEqual(error as? AccountError, .signedOut) }
         XCTAssertNil(try store.load())
     }
 
     func testNonAuthFailuresDoNotRefreshOrClear() async throws {
         let store = MemoryStore(Credentials(access: "ok", refresh: "r", expiresAt: .distantFuture))
         let session = try AccountSession(api: ControlledAPI(), store: store)
-        do { _ = try await session.authorized { _ -> Int in throw AccountError.unavailable }; XCTFail() }
+        do { _ = try await session.authorized { _ -> Int in throw AccountError.unavailable }; XCTFail("authorized must throw") }
         catch { XCTAssertEqual(error as? AccountError, .unavailable) }
         XCTAssertNotNil(try store.load())
     }

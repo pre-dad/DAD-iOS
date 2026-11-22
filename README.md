@@ -19,27 +19,49 @@ Select the shared DAD scheme and an iPhone simulator. A Debug build with no `DAD
 labeled synthetic account through the same session API as a configured deployment. Release
 builds compile out every preview double and ignore `--preview-*` launch arguments; an
 unconfigured Release build shows the unavailable state instead of sample data.
-Run `bash scripts/check-ios.sh` for contract verification, Swift unit tests, and simulator
+Run `bash scripts/check-ios.sh` for contract verification, Swift unit tests, Release compilation, and simulator
 journeys. `DAD_SIMULATOR_ID`, `DAD_SWIFT_BUILD`, and `DAD_XCODE_BUILD` override the simulator
 and disposable build paths. Unit tests alone: `swift test --scratch-path ~/.cache/dad-ios-swift` (add `--disable-sandbox`
 when running inside a tool that already sandboxes processes).
 
-CI executes that same script. The pinned Apple generator plugin is trusted explicitly
+CI executes that same script. It explicitly installs the freshly built app and UI-test runner before
+testing, so a warm simulator cannot silently execute an older installed bundle.
+The pinned Apple generator plugin is trusted explicitly
 with `-skipPackagePluginValidation`; compilation and tests remain enabled. Xcode's benign
 AppIntents metadata-extraction diagnostic is not suppressed; this app defines no intents.
 
+Swift 6 compilation supplies type and concurrency checking; there is no separate Swift lint tool.
+`scripts/check-ios.sh` also runs `plutil -lint` over the project file, Info.plist, entitlements, and privacy
+manifest. The thread-sanitizer run is local-only: it rebuilds the package with instrumentation, and CI's job is
+already close to its time limit. Additional local checks:
+
+```sh
+swift test --scratch-path /tmp/dad-ios-thread --force-resolved-versions --sanitize=thread
+gitleaks git --redact --no-banner --config .gitleaks.toml
+node --test scripts/check-secrets-config.test.mjs
+```
+
+The last two commands require Gitleaks 8.30.0+ (CI installs the pinned binary). The secret-scan
+job also tests that its reviewed fixture exceptions cannot hide another credential in the same file.
+Settings includes About DAD with the running app's version and build number. The pinned R1 contract
+accepts test payments only, which About states in every build; sample-account copy appears only in
+Debug previews and stub-backed runs.
+
 ## Shared contract and native boundaries
 
-`foundation.lock.json` pins mobile foundation 2.12.0 and its manifest digest. The vendored
+`foundation.lock.json` pins mobile foundation 2.13.0 and its manifest digest. The vendored
 release is verified before generation. `prepare-client.mjs` copies the Swift generator input, null-only Codable adapter, tokens,
 and link policy into ignored generator inputs. Apple's pinned Swift generator produces
-types and a client during the build, scoped to profile, claim, refresh, and logout.
+types and a client during the build, scoped by the checked-in operation allow-list in
+`Sources/DADFoundation/openapi-generator-config.yaml` to the native features described below.
 Generated files are not hand-edited or separately maintained. Dependency revisions are
 locked in `Package.resolved` and the Xcode workspace's SwiftPM lock.
 
 `AccountSession` owns one shared refresh operation, atomic credential replacement,
 revocation, bounded read retry, and logout/account-switch race protection. Keychain uses
-non-synchronizing `WhenUnlockedThisDeviceOnly` items. Tokens and proofs are redacted from
+non-synchronizing `WhenUnlockedThisDeviceOnly` items. iOS keeps Keychain items when an app is deleted, so an
+install's first launch clears the donor and partner sessions (`FreshInstall`): deleting the app signs out. It
+waits for a launch after the device's first unlock, and keeps the partner application receipt. Tokens and proofs are redacted from
 value descriptions; they are never logged. URLSession rejects redirects, sends no
 browser cookies or Origin, limits responses to 1 MiB, and has request/resource timeouts.
 Canceling a read does not cancel another caller's shared refresh. An in-flight refresh
@@ -52,40 +74,48 @@ origin and public website origin for a real environment, and `DAD_ASSOCIATED_DOM
 (also the passkey relying party): `App/DAD.entitlements` declares it as the `applinks:` and `webcredentials:` associated
 domain, which DAD-Main's `/.well-known/apple-app-site-association` answers for. No production hostname or secret
 is compiled by default. A Release build with no API origin shows an unavailable state and sign-in fails
-with a clear message; it never serves synthetic data. Wired against the API: donor phone + SMS sign-in
-(`beginPhoneSignIn`/`finishPhoneSignIn`, existing accounts only), claim-link sign-in, profile read,
-settings load/save, refresh, logout and account deletion. All authenticated calls go through
-`AccountSession.authorized` (single-flight refresh, one bounded 401 retry, epoch-guarded). Also wired
-(P1b): new-donor email signup (`postDonorSignup`; the emailed link is claimed in-app, tapped or pasted),
-email + password sign-in (`postDonorPasswordSignIn`) and set/change password in Settings
-(`postDonorMePassword`). Built and tested but **switched off until configured**: Sign in with Apple, Google
-and passkeys (see below). Also wired (P2, donor home reads): the dashboard (`dashboard`: streak card with
-30-day bar and next milestone, rank line, total given, network, referral totals; `preparing` and the
-null/unknown figures are shown as such, never as zero), today's initiative (`todayInitiative`, 404 = nothing
-in rotation), paged gift history (`gifts`, 50 a page, capped at 500 rows in memory) with a per-gift record
-(`receipt`) and the calendar-year total (`annualSummary`). Engagement is wired too (see Engagement). The
-partner portal is wired: an approved partner user signs in with an emailed link (`partnerRequestSignIn`, then
-`partnerAcceptInvite` from the tapped or pasted `/partner/accept` link), and the 12-hour partner session is kept
-in its own Keychain item. The portal reads the overview, initiatives, spend, our-people rollup and teams;
-admins edit the organization profile, workforce size and logo, invite and remove users, share the company
-code and export or re-download PDF reports. Partner calls use the native bearer path (`X-DAD-Client: native`, `Authorization: Bearer`; DAD-Main's
-`partnerSession` accepts it on every partner route), and every status maps the same way: 401 ends the 12-hour session, 403 is a
-role refusal, 404, 409, 422 and 429 (including the ingress limiter's body-less 429) each have their own message. Role, initiative
-status, metric unit and application status are open strings, so a value added later cannot fail a portal read (an unknown role is a
-viewer). A new partner applies from partner sign-in (`applyWithReceipt`, contract 2.11; the website's `<public origin>/apply` stays
-linked): the app generates the 43-character receipt, keeps it in its own Keychain item before sending, and repeats the same
-`Idempotency-Key` and receipt when an attempt is unconfirmed (a 503, a lost connection or a 429, whose `Retry-After` is shown). A
-422, 409 or 403 forgets the receipt and unlocks the form. The status card above sign-in reads `applicationStatus` with the receipt
-as bearer, and the receipt is forgotten once an approval or rejection has been shown, or when the server answers 401. Analytics and push are described below. Native entry hooks
-handle cold/foreground URLs through the origin/path policy. Profile destinations can
-wait for sign-in. Email-change, referral, and other unimplemented destinations use the
-website in Safari, without sending bearer credentials. Claim links with supported dashboard or payment-method return destinations are
-claimed in-app and open the requested native screen.
+with a clear message; it never serves synthetic data.
+
+Wired against the API:
+
+- **Sign-in and account.** Donor phone + SMS sign-in (`beginPhoneSignIn`/`finishPhoneSignIn`, existing accounts only),
+  claim-link sign-in, profile read, settings load/save, refresh, logout and account deletion. New-donor email signup
+  (`postDonorSignup`; the emailed link is claimed in-app, tapped or pasted), email + password sign-in
+  (`postDonorPasswordSignIn`) and set/change password in Settings (`postDonorMePassword`). All authenticated calls go
+  through `AccountSession.authorized` (single-flight refresh, one bounded 401 retry, epoch-guarded).
+- **Donor home.** The dashboard (`dashboard`: streak card with 30-day bar and next milestone, rank line, total given,
+  network, referral totals; `preparing` and the null/unknown figures are shown as such, never as zero), today's
+  initiative (`todayInitiative`, 404 = nothing in rotation), paged gift history (`gifts`, 50 a page, capped at 500 rows
+  in memory) with a per-gift record (`receipt`) and the calendar-year total (`annualSummary`). Engagement is wired too
+  (see Engagement).
+- **Partner portal.** An approved partner user signs in with an emailed link (`partnerRequestSignIn`, then
+  `partnerAcceptInvite` from the tapped or pasted `/partner/accept` link), and the 12-hour partner session is kept in
+  its own Keychain item. The portal reads the overview, initiatives, spend, our-people rollup and teams; admins edit
+  the organization profile, workforce size and logo, invite and remove users, share the company code and export or
+  re-download PDF reports. Partner calls use the native bearer path (`X-DAD-Client: native`,
+  `Authorization: Bearer`; DAD-Main's `partnerSession` accepts it on every partner route), and every status maps the
+  same way: 401 ends the 12-hour session, 403 is a role refusal, 404, 409, 422 and 429 (including the ingress
+  limiter's body-less 429) each have their own message. Role, initiative status, metric unit and application status
+  are open strings, so a value added later cannot fail a portal read: an unknown role is a viewer and a metric in an
+  unknown unit is hidden.
+- **Partner application.** A new partner applies from partner sign-in (`applyWithReceipt`, contract 2.11; the
+  website's `<public origin>/apply` stays linked): the app generates the 43-character receipt, keeps it in its own
+  Keychain item before sending, and repeats the same `Idempotency-Key` and receipt when an attempt is unconfirmed (a
+  503, a lost connection or a 429, whose `Retry-After` is shown). A 422, 409 or 403 forgets the receipt and unlocks
+  the form. The status card above sign-in reads `applicationStatus` with the receipt as bearer, and the receipt is
+  forgotten once an approval or rejection has been shown, or when the server answers 401.
+- **Analytics and push** are described below.
+- **Links.** Native entry hooks handle cold/foreground URLs through the origin/path policy. Profile destinations can
+  wait for sign-in. Email-change, referral, and other unimplemented destinations use the website in Safari, without
+  sending bearer credentials. Claim links with supported dashboard or payment-method return destinations are claimed
+  in-app and open the requested native screen.
+
+Built and tested but **switched off until configured**: Sign in with Apple, Google and passkeys (see below).
 
 ### Switching on Apple, Google and passkeys
 
-These methods are implemented (Wire conformers, models, UI states, stub-transport tests) but show
-"Not available yet" because the build carries none of the account-held configuration. Nothing here is
+These methods are implemented (Wire conformers, models, UI states, stub-transport tests) but stay
+hidden, with an unavailable-methods note, because the build carries none of the account-held configuration. Nothing here is
 invented or committed; supply, per method:
 
 - **Sign in with Apple:** a signing team, the "Sign in with Apple" capability
@@ -156,7 +186,7 @@ The donor home shows a "Your monthly gift" card; "Manage gift" opens the gift sc
 - Not covered: pause/resume (not in the contract), Apple Pay in-app (gated on the nonprofit decision), and the
   real Stripe pages (device/staging acceptance).
 
-## Events (P4)
+## Events
 
 Real `WireEvents` over the generated client, behind `EventsService`: the list (`donorEvents` merged with
 `inviteOnlyEvents`, de-duplicated, soonest first), detail (`donorEventDetail`), reserve / join waitlist
@@ -187,7 +217,7 @@ Real `WireEvents` over the generated client, behind `EventsService`: the list (`
 - **Test stub.** `--stub-backend --stub-signed-in` serves five scripted events (`--stub-events-ungated`
   hides the invite-only one, `--stub-events-fail-first` fails the first list read).
 
-## Engagement (P5)
+## Engagement
 
 Real `WireEngagement` behind `EngagementService`, opened from the donor home ("See your impact"):
 lifetime impact and rank from `dashboard`, the 24-badge grid (`donorBadges`; earned / locked and the perk are
@@ -230,7 +260,7 @@ question that personal data is deleted while aggregate/receipt records required 
 retained.
 
 **Privacy disclosure (App Store Privacy "nutrition label").** The app collects: email and phone
-(account), approximate location via ZIP (streak day boundary, nearby events), and gift history.
+(account), name (signup and public sharing), approximate location via ZIP (streak day boundary, nearby events), and gift history.
 No third-party analytics SDK is embedded — analytics events go only to the first-party DAD-Main
 ingest endpoint, and only after the donor allows them. No tracking across apps/sites; no IDFA. Declare Contact Info,
 Coarse Location, and Financial Info as "used for app functionality", and Product Interaction as "analytics",
@@ -249,18 +279,18 @@ app (`org.dad.foundation.uitests` / `.debug.uitests`).
 
 ### Device-gated hardening (manual, pre-submission — not CI-automatable)
 
-These Phase H items require a real device / Instruments and are tracked as a manual pre-submission
+These items require a real device / Instruments and are tracked as a manual pre-submission
 checklist; they cannot run on the CI simulator:
 
-- [ ] Instruments Leaks/Allocations pass over signup → gift, events, and the partner dashboard.
-- [ ] VoiceOver walk, Dynamic Type XXL, and contrast audit on device.
-- [ ] Performance on a throttled network: dashboards < 2s, checkout < 60s (PRD §10).
-- [ ] Real-device APNs delivery; Apple Pay or the Stripe web handoff end-to-end.
-- [ ] Universal-link + deferred-attribution acceptance on a clean install.
-- [ ] Offline and flaky-network walk (airplane mode mid-checkout, mid-sign-in, mid-reservation) on device.
-- [ ] Certificate handling: the app relies on system trust with ATS defaults (no exceptions, HTTPS-only origin
+- Instruments Leaks/Allocations pass over signup → gift, events, and the partner dashboard.
+- VoiceOver walk, Dynamic Type XXL, and contrast audit on device.
+- Performance on a throttled network: dashboards < 2s, checkout < 60s (PRD §10).
+- Real-device APNs delivery; Apple Pay or the Stripe web handoff end-to-end.
+- Universal-link + deferred-attribution acceptance on a clean install.
+- Offline and flaky-network walk (airplane mode mid-checkout, mid-sign-in, mid-reservation) on device.
+- Certificate handling: the app relies on system trust with ATS defaults (no exceptions, HTTPS-only origin
       check); decide before launch whether DAD wants pinning, which is an operational burden on cert rotation.
-- [ ] Confirm `App/PrivacyInfo.xcprivacy` (collected data types, UserDefaults reason `CA92.1`) matches the
+- Confirm `App/PrivacyInfo.xcprivacy` (collected data types, UserDefaults reason `CA92.1`) matches the
       final App Store privacy answers before submission; counsel owns the disclosure wording.
 
 ### Signing (manual, account-held — not committed, not CI-verified)
@@ -269,38 +299,40 @@ Code signing needs an Apple Developer account's team, certificate, and provision
 which are yours and are never committed. CI builds with `CODE_SIGNING_ALLOWED=NO`, so signing is
 exercised only at archive/submission time. Pre-submission:
 
-- [ ] Set `DEVELOPMENT_TEAM` for the archive build (an xcconfig or the archive command, kept out
+- Set `DEVELOPMENT_TEAM` for the archive build (an xcconfig or the archive command, kept out
       of the repo), and confirm `CODE_SIGN_STYLE` matches your provisioning (Automatic, or Manual
       with an explicit profile).
-- [ ] Register the `org.dad.foundation` App ID in the developer portal with the Push Notifications
+- Register the `org.dad.foundation` App ID in the developer portal with the Push Notifications
       and Associated Domains capabilities enabled.
-- [ ] Produce an `ExportOptions.plist` for `xcodebuild -exportArchive` (method `app-store`, your
+- Produce an `ExportOptions.plist` for `xcodebuild -exportArchive` (method `app-store`, your
       team id) — gitignored, not committed.
-- [ ] Verify the archived build is signed with the distribution certificate before upload.
+- Verify the archived build is signed with the distribution certificate before upload.
 
 ## Scale (50,000 users now, 1,000,000 within a year)
 
 - **Nothing polls.** Screens read on open and on explicit refresh; there are no timers hitting the API. The one
-  bounded re-read loop runs after the hosted checkout sheet closes. A cold launch costs a profile read, the
-  dashboard and today's initiative reads, and one push-device registration; steady state is a handful of requests
-  per user per day.
+  bounded re-read loop runs after the hosted checkout sheet closes. Home reads the profile, dashboard,
+  today's initiative, recurring gift, payment status and (when subscribed) amount offer, and registers an
+  available push token. Other tabs and Settings fetch their own sections when opened.
 - **Retries cannot storm.** Authenticated reads retry at most once after a 401 (single-flight refresh, so N
-  concurrent calls make one refresh request). Idempotent commands reuse their key on a retry and honor
-  `Retry-After`. Analytics back off exponentially and are capped at 500 buffered events.
-- **Payloads are bounded.** Responses are capped at 1 MiB, gift history pages at 50 rows (500 in memory), analytics
+  concurrent calls make one refresh request). Idempotent commands reuse their key on a retry; application
+  submission displays the server's `Retry-After` when provided. Analytics back off exponentially and are
+  capped at 500 buffered events, with a bounded 1,000-id local deduplication window.
+- **Payloads are bounded.** Responses are capped at 1 MiB (partner PDFs at 16 MiB), gift history pages at 50 rows (500 in memory), analytics
   batches at 100 events.
 - **Server-side pressure to plan for.** A push-driven open (an event reminder to all attendees) arrives within
   seconds, so the dashboard, initiative and registration endpoints need headroom for a launch-minute burst; the
-  push sender should jitter or batch sends. Client requests carry no jitter on launch; add server-side
-  rate limiting and cache the public initiative read at the edge.
+  push sender should jitter or batch sends. Client requests carry no jitter on launch. DAD-Main rate limits
+  each client across all its API replicas; caching the public initiative read at the edge remains to plan.
 
 ## Analytics and push (contract 2.9.0)
 
-**Analytics are opt-in**, worded and counted as on the website. The start screen asks once ("Allow usage
+**Analytics are opt-in**, worded and counted as on the website. The signed-in donor shell asks once ("Allow usage
 analytics?") and Settings has a "Usage analytics" switch; until the donor allows it nothing is recorded. Events go
 only to DAD-Main's `ingestAnalytics` (first party, `X-DAD-Platform: IOS`, attributed to the donor when signed in)
 through `AnalyticsRecorder`, in batches of up to 100 with a stable id each so a retried batch is not double-counted;
-declining drops anything still buffered. Offline, at most 500 events are kept (oldest dropped), and after a failed
+declining drops anything still buffered and prevents queued batches from starting; an upload already in flight
+may finish. Offline, at most 500 events are kept (oldest dropped), and after a failed
 upload new events do not retry until an exponential backoff (30 s doubling to 15 min) has passed. The app emits `app_opened`, `role_selected`, `invite_shared`
 (`share_sheet` / `copy`), `irl_code_shown` and `push_opened`; every other event is derived from the successful API
 call it stands for by the same rules as the website's `observeAPI` (`ObservingTransport`), e.g. `signup_started`

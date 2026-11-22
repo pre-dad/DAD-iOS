@@ -26,19 +26,15 @@ func makeNativeTransport(observed: Bool = true) -> any ClientTransport {
 }
 
 extension HTTPField.Name {
-    // Valid by construction; asserting once here avoids a force-unwrap at every request.
-    fileprivate static let dadClient: HTTPField.Name = {
-        guard let name = HTTPField.Name("X-DAD-Client") else { preconditionFailure("invalid header name literal") }
+    fileprivate static let dadClient = headerName("X-DAD-Client")
+    fileprivate static let dadPlatform = headerName("X-DAD-Platform")
+    fileprivate static let origin = headerName("Origin")
+
+    // Valid by construction; asserting once per literal avoids a force-unwrap at every request.
+    private static func headerName(_ literal: String) -> HTTPField.Name {
+        guard let name = HTTPField.Name(literal) else { preconditionFailure("invalid header name literal") }
         return name
-    }()
-    fileprivate static let dadPlatform: HTTPField.Name = {
-        guard let name = HTTPField.Name("X-DAD-Platform") else { preconditionFailure("invalid header name literal") }
-        return name
-    }()
-    fileprivate static let origin: HTTPField.Name = {
-        guard let name = HTTPField.Name("Origin") else { preconditionFailure("invalid header name literal") }
-        return name
-    }()
+    }
 }
 
 /// Native request shaping shared by session bootstrap and product calls: native client marker,

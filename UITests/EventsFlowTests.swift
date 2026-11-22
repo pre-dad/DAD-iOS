@@ -44,7 +44,9 @@ import XCTest
         XCTAssertTrue(app.buttons["reserve-e1"].waitForExistence(timeout: 3))
         app.buttons["reserve-e1"].tap()
         // Dismiss the confirmation card to get back to the row.
-        if app.buttons["Done"].waitForExistence(timeout: 3) { app.buttons["Done"].tap() }
+        let done = app.buttons["Done"]
+        XCTAssertTrue(done.waitForExistence(timeout: 3))
+        done.tap()
 
         // Now the reserved event offers Cancel; tapping it shows the INLINE confirm block.
         let cancel = app.buttons["cancel-e1"]

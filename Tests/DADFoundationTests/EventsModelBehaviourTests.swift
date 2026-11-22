@@ -15,6 +15,7 @@ private actor ScriptedEvents: EventsService {
     var reserveError: Error?
     var cancelError: Error?
     var detailError: Error?
+    var listError: Error?
     var calendarResult: Result<Data, Error> = .success(Data("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n".utf8))
     private(set) var reserveCalls = 0
     private(set) var listCalls = 0
@@ -27,13 +28,18 @@ private actor ScriptedEvents: EventsService {
     func setReserveError(_ error: Error?) { reserveError = error }
     func setCancelError(_ error: Error?) { cancelError = error }
     func setDetailError(_ error: Error?) { detailError = error }
+    func setListError(_ error: Error?) { listError = error }
     func setList(_ events: [DonorEvent]) { list = events }
     func setCalendar(_ result: Result<Data, Error>) { calendarResult = result }
 
-    func events() async throws -> [DonorEvent] { listCalls += 1; return list }
+    func events() async throws -> [DonorEvent] {
+        listCalls += 1
+        if let listError { throw listError }
+        return list
+    }
     func event(id: String) async throws -> DonorEvent {
         if let detailError { throw detailError }
-        let result = list.first { $0.id == id }!
+        guard let result = list.first(where: { $0.id == id }) else { throw AccountError.notFound }
         await detailGate?.pass()
         return result
     }
@@ -172,6 +178,29 @@ final class EventsModelBehaviourTests: XCTestCase {
         XCTAssertNil(model.actionError, "the reservation worked; a failed re-read is not an error")
     }
 
+    func testAFailedRefreshKeepsTheRowsAndShowsANotice() async {
+        let service = ScriptedEvents(list: [event()])
+        let model = EventsModel(service: service)
+        await model.load()
+        await service.setListError(AccountError.unavailable)
+        await model.load()
+        XCTAssertEqual(model.phase, .ready)
+        XCTAssertEqual(model.events.map(\.id), ["e1"])
+        XCTAssertNotNil(model.refreshNotice)
+        await service.setListError(nil)
+        await model.load()
+        XCTAssertNil(model.refreshNotice)
+    }
+
+    func testAFailedFirstLoadStillShowsTheFailedState() async {
+        let service = ScriptedEvents(list: [event()])
+        await service.setListError(AccountError.unavailable)
+        let model = EventsModel(service: service)
+        await model.load()
+        guard case .failed = model.phase else { return XCTFail("\(model.phase)") }
+        XCTAssertNil(model.refreshNotice)
+    }
+
     func testSignedOutIsReportedFromLoadAndCommands() async {
         let service = ScriptedEvents(list: [event()])
         await service.setReserveError(AccountError.signedOut)
@@ -196,6 +225,7 @@ final class EventsModelBehaviourTests: XCTestCase {
         XCTAssertTrue(try String(contentsOf: file.url, encoding: .utf8).hasPrefix("BEGIN:VCALENDAR"))
         model.clearCalendar()
         XCTAssertNil(model.calendarFile)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file.url.path), "the exported file is removed once the share sheet is done")
 
         await service.setCalendar(.failure(AccountError.notFound))
         await model.prepareCalendar(eventID: "e1")
@@ -256,7 +286,6 @@ final class CheckInModelHardeningTests: XCTestCase {
     }
 
     func testServerRefusalsReadAsEventMessages() async {
-        let service = ScriptedEvents(list: [])
         let cases: [(AccountError, String)] = [
             (.forbidden, "You’re not eligible to check in to this event."),
             (.rateLimited, "Too many attempts. Please wait a moment and try again."),
@@ -266,7 +295,6 @@ final class CheckInModelHardeningTests: XCTestCase {
             await model.submit(code: validCheckInToken, window: window, now: inside)
             XCTAssertEqual(model.state, .failed(message))
         }
-        _ = service
     }
 
     func testSignedOutIsFlagged() async {

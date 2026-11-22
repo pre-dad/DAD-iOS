@@ -2,7 +2,6 @@ import Foundation
 import XCTest
 @testable import DADFoundation
 
-// Deterministic clock helpers.
 private func date(_ iso: String) -> Date {
     let f = ISO8601DateFormatter()
     return f.date(from: iso)!
@@ -54,7 +53,6 @@ final class EventAvailabilityTests: XCTestCase {
     func testNotYetOpenBeforeBookingWindow() {
         let opens = date("2026-11-20T09:00:00Z")
         XCTAssertEqual(makeEvent(bookingOpensAt: opens).availability(now: now), .notYetOpen(opensAt: opens))
-        // Once the window opens, it becomes reservable.
         XCTAssertEqual(makeEvent(bookingOpensAt: opens).availability(now: date("2026-11-20T10:00:00Z")), .reservable(spotsLeft: 5))
     }
 
@@ -74,7 +72,7 @@ final class EventAvailabilityTests: XCTestCase {
     func testUncappedEventIsAlwaysReservable() {
         let open = makeEvent(spotsLeft: 0, capacity: 0)
         XCTAssertTrue(open.isUncapped)
-        XCTAssertEqual(open.availability(now: now), .reservable(spotsLeft: Int.max))
+        XCTAssertEqual(open.availability(now: now), .reservable(spotsLeft: nil))
         XCTAssertEqual(open.spotsLabel, "Open to everyone")
     }
 
@@ -114,12 +112,6 @@ final class InviteOnlyGatingTests: XCTestCase {
                                capacity: 1, spotsLeft: 1, status: .none)
         XCTAssertTrue(event.isInviteOnly)
         XCTAssertEqual(event.typeLabel, "Invite-only")
-    }
-
-    func testReservationStatusDecodesUnknownToNone() {
-        XCTAssertEqual(ReservationStatus(contract: "reserved"), .reserved)
-        XCTAssertEqual(ReservationStatus(contract: "checked_in"), .checkedIn)
-        XCTAssertEqual(ReservationStatus(contract: "some_future_value"), .none)
     }
 }
 

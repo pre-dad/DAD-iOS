@@ -81,13 +81,7 @@ struct AccountSettingsScreen: View {
         // Notifications (§6.11) — payment-failure email is absent by design.
         section("Notifications") {
             NotificationPermissionRow()
-            ForEach(snapshot.preferences.pushToggles, id: \.key) { toggle in
-                Toggle(toggle.label, isOn: Binding(
-                    get: { toggle.value },
-                    set: { newValue in Task { await model.toggle(toggle.key, newValue) } }
-                )).disabled(model.isBusy).accessibilityIdentifier("pref-\(toggle.key)")
-            }
-            ForEach(snapshot.preferences.emailToggles, id: \.key) { toggle in
+            ForEach(snapshot.preferences.pushToggles + snapshot.preferences.emailToggles, id: \.key) { toggle in
                 Toggle(toggle.label, isOn: Binding(
                     get: { toggle.value },
                     set: { newValue in Task { await model.toggle(toggle.key, newValue) } }
@@ -99,15 +93,15 @@ struct AccountSettingsScreen: View {
         section("Privacy") {
             Toggle("Show my ranking", isOn: Binding(
                 get: { snapshot.preferences.showRanking },
-                set: { newValue in Task { await model.toggle("rankings_opted_out", !newValue) } }
+                set: { newValue in Task { await model.toggle(AccountPreferences.rankingsOptedOutKey, !newValue) } }
             )).disabled(model.isBusy).accessibilityIdentifier("ranking-toggle")
             Toggle("Show me in my network", isOn: Binding(
                 get: { snapshot.preferences.networkVisible },
-                set: { newValue in Task { await model.toggle("network_visible", newValue) } }
-            )).disabled(model.isBusy).accessibilityIdentifier("pref-network_visible")
+                set: { newValue in Task { await model.toggle(AccountPreferences.networkVisibleKey, newValue) } }
+            )).disabled(model.isBusy).accessibilityIdentifier("pref-\(AccountPreferences.networkVisibleKey)")
             Toggle("I’d like to volunteer", isOn: Binding(
                 get: { snapshot.preferences.volunteer },
-                set: { newValue in Task { await model.toggle("volunteer", newValue) } }
+                set: { newValue in Task { await model.toggle(AccountPreferences.volunteerKey, newValue) } }
             )).disabled(model.isBusy).accessibilityIdentifier("pref-volunteer")
             if snapshot.preferences.volunteer {
                 VolunteerInterestsSection(model: model, interests: snapshot.preferences.volunteerInterests)
@@ -131,10 +125,25 @@ struct AccountSettingsScreen: View {
             }
         }
 
-        // Account: the single quiet preview footnote lives here (not per card).
-        section("Account") {
-            Text("Preview build · test payments only").font(.footnote).foregroundStyle(.secondary)
-                .accessibilityIdentifier("settings-preview-note")
+        section("About DAD") {
+            Text("Dynamic Aid Delivery, INC.").font(.headline)
+            let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+            let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
+            Text("Version \(version) (\(build))").font(.footnote).foregroundStyle(.secondary)
+                .accessibilityIdentifier("settings-version")
+            Text("Give monthly, see your impact, invite friends, and volunteer in your community.").font(.footnote)
+            Text("Test payments only · Gift records are not tax receipts.").font(.footnote).foregroundStyle(.secondary)
+                .accessibilityIdentifier("settings-payment-note")
+            if let raw = Bundle.main.object(forInfoDictionaryKey: "DADPublicOrigin") as? String,
+               let origin = PublicOrigin.resolve(raw).flatMap(URL.init(string:)), !raw.isEmpty {
+                Link("DAD website", destination: origin)
+            }
+            #if DEBUG
+            if launchFlag("--stub-backend") || (Bundle.main.object(forInfoDictionaryKey: "DADAPIOrigin") as? String ?? "").isEmpty {
+                Text("Preview · Sample account").font(.footnote).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("settings-preview-note")
+            }
+            #endif
         }
 
         // Sign out + Delete account in a separate bottom section.
@@ -199,7 +208,7 @@ private struct PasswordSection: View {
                     .textFieldStyle(.roundedBorder).textContentType(.newPassword).accessibilityIdentifier("password-new")
                 SecureField("Confirm new password", text: $model.confirmPassword)
                     .textFieldStyle(.roundedBorder).textContentType(.newPassword).accessibilityIdentifier("password-confirm")
-                Text(model.newPasswordHint ?? "Use 12 to 72 characters.").font(.footnote).foregroundStyle(.secondary)
+                Text(model.newPasswordHint ?? CredentialRules.passwordRule).font(.footnote).foregroundStyle(.secondary)
                 if model.confirmMismatch {
                     Text("The two passwords don’t match.").font(.footnote).foregroundStyle(Color.dad("fail"))
                 }

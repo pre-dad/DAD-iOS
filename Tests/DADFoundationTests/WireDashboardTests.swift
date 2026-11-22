@@ -6,14 +6,6 @@ import XCTest
 
 private let giftUUID = "7b0c6f9e-3c5a-4f0e-9a52-0d3a1c0e7a11"
 
-func dashboardReadyJSON(streak: String? = nil, rank: String = "null", optedOut: Bool = false, network: String? = nil,
-                        referrals: String? = nil, given: String = "124000") -> String {
-    let streakJSON = streak ?? #"{"at_risk":false,"current":18,"grace_ends_at":null,"ladder":{"days":18,"last_milestone":7,"next_milestone":30,"days_to_next":12,"bar":[true,true,true,false]}}"#
-    let networkJSON = network ?? #"{"active_count":3,"annualized_minor":474500,"currency":"USD"}"#
-    let referralsJSON = referrals ?? #"{"currency":"USD","irl":1,"irl_minor":3000,"link":2,"link_minor":9000,"total_minor":12000}"#
-    return #"{"state":"ready","mode":"test","computed_at":"2026-10-30T12:00:00Z","founding_donor":true,"referrals":\#(referralsJSON),"streak":\#(streakJSON),"rank":\#(rank),"rankings_opted_out":\#(optedOut),"network":\#(networkJSON),"impact":{"given_minor":\#(given),"currency":"USD","initiatives_funded":4,"events_volunteered":2}}"#
-}
-
 let todayJSON = #"{"initiative_id":"abc","slug":"meals","title":"Meals on Wheels","summary":"Hot meals for neighbours.","region":"TX","location":"Austin, TX","type":"PROGRAM","started_on":"2025-01-02","metrics":[{"label":"Meals this week","value":1200,"unit":"PEOPLE","verified_on":"2026-10-28"},{"label":"Cost per meal","value":425,"unit":"USD_CENTS","verified_on":"2026-10-28"},{"label":"Partners","value":1,"unit":"PARTNERS","verified_on":"2026-10-28"}],"distinct_shown":4}"#
 
 func giftsPageJSON(ids: [String], next: Int?) -> String {
@@ -109,6 +101,14 @@ final class WireDashboardTests: XCTestCase {
         }
     }
 
+    func testBodylessIngress429MapsToRateLimited() async throws {
+        let rig = try make(ScriptedTransport { _, _ in (.tooManyRequests, "") })
+        do { _ = try await rig.service.dashboard(); XCTFail("expected rate limited") }
+        catch { XCTAssertEqual(error as? AccountError, .rateLimited) }
+        do { _ = try await rig.service.gifts(offset: 0); XCTFail("expected rate limited") }
+        catch { XCTAssertEqual(error as? AccountError, .rateLimited) }
+    }
+
     func testMalformedBodyIsAnErrorNotACrash() async throws {
         for body in ["not json", #"{"state":"ready"}"#, #"{"state":"mystery","mode":"test"}"#] {
             let rig = try make(ScriptedTransport { _, _ in (.ok, body) })
@@ -175,11 +175,7 @@ final class WireDashboardTests: XCTestCase {
         }
         let rig = try make(transport)
         let task = Task { try await rig.service.dashboard() }
-        await gate.waitUntilEntered()
-        task.cancel()
-        await gate.release()
-        do { _ = try await task.value; XCTFail() }
-        catch { XCTAssertTrue(error.isCancellation, "\(error)") }
+        await assertCancels(task, at: gate)
         XCTAssertNotNil(try rig.store.load(), "cancelling a read must not end the session")
     }
 

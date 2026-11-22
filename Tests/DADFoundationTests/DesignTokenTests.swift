@@ -11,12 +11,13 @@ final class DesignTokenTests: XCTestCase {
         }
     }
 
-    func testPrimaryButtonPairingMeetsAA() {
+    func testTokenPairingsMeetContrast() {
         func luminance(_ hex: String) -> Double {
-            let digits = hex.dropFirst()
-            let channels = stride(from: 0, to: 6, by: 2).map { offset -> Double in
-                let start = digits.index(digits.startIndex, offsetBy: offset)
-                let value = Double(Int(digits[start..<digits.index(start, offsetBy: 2)], radix: 16)!) / 255
+            var digits = String(hex.dropFirst())
+            if digits.count == 3 { digits = digits.map { "\($0)\($0)" }.joined() }
+            guard digits.count == 6, let packed = Int(digits, radix: 16) else { XCTFail("token \(hex) is not a hex colour"); return 0 }
+            let channels = [16, 8, 0].map { shift -> Double in
+                let value = Double((packed >> shift) & 0xFF) / 255
                 return value <= 0.03928 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
             }
             return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
@@ -37,10 +38,21 @@ final class DesignTokenTests: XCTestCase {
     }
 
     func testShorthandHexExpands() {
-        XCTAssertNotNil(Color.parseHex("#fff"))
+        XCTAssertEqual(Color.parseHex("#fff"), Color.parseHex("#ffffff"))
+        XCTAssertEqual(Color.parseHex("#0af"), Color.parseHex("#00aaff"))
         XCTAssertNotNil(Color.parseHex("#0e1e1e"))
         XCTAssertNil(Color.parseHex("#ffff"))
         XCTAssertNil(Color.parseHex("fff"))
         XCTAssertNil(Color.parseHex("#ggg"))
+    }
+}
+
+final class ComponentTokenTests: XCTestCase {
+    func testKnownTokenResolvesAndUnknownFallsBack() {
+        XCTAssertNotNil(DADTokens.color["brand"])
+        XCTAssertEqual(CGFloat.dadSpace("4"), 16)
+        XCTAssertEqual(CGFloat.dadRadius("pill"), 100)
+        // Unknown token name yields 0 spacing rather than a crash.
+        XCTAssertEqual(CGFloat.dadSpace("nope"), 0)
     }
 }

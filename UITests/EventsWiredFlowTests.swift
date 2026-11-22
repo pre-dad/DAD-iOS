@@ -164,7 +164,7 @@ import XCTest
         add.tap()
         let sheet = app.otherElements["ActivityListView"]
         let bar = app.navigationBars["park-cleanup.ics"]
-        XCTAssertTrue(sheet.waitForExistence(timeout: 10) || bar.waitForExistence(timeout: 5) || app.collectionViews.firstMatch.waitForExistence(timeout: 5),
+        XCTAssertTrue(sheet.waitForExistence(timeout: 10) || bar.waitForExistence(timeout: 5),
                       "the system share sheet should present the .ics")
     }
 

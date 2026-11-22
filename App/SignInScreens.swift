@@ -28,16 +28,14 @@ struct NotificationPermissionRow: View {
     }
 }
 
-/// Presents the analytics question as a small sheet once, right after first sign-in. Same two options/copy and the same identifiers; dismisses once answered.
+/// Presents the analytics question as a small sheet once, right after first sign-in; dismisses once answered.
 struct AnalyticsChoiceSheet: View {
     @Bindable var analytics: AnalyticsController
     let onDone: () -> Void
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            AnalyticsChoice(analytics: analytics)
-        }
-        .frame(maxWidth: 520, alignment: .leading).padding(28).frame(maxWidth: .infinity, alignment: .topLeading)
-        .onChange(of: analytics.choice) { _, choice in if choice != nil { onDone() } }
+        AnalyticsChoice(analytics: analytics)
+            .frame(maxWidth: 520, alignment: .leading).padding(28).frame(maxWidth: .infinity, alignment: .topLeading)
+            .onChange(of: analytics.choice) { _, choice in if choice != nil { onDone() } }
     }
 }
 

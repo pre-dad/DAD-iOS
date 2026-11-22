@@ -17,7 +17,8 @@ func eventJSON(id: String = eventA, type: String = "VOLUNTEER", status: String =
                zone: String = "America/Chicago", checkedInAt: String = "null") -> String {
     #"{"id":"\#(id)","slug":"park-cleanup","title":"Park Cleanup","type":"\#(type)","description":"Bring water.","venue":"Zilker Park","address":"2100 Barton Springs Rd","city":"Austin","starts_at":"\#(start)","ends_at":"\#(end)","capacity":\#(capacity),"spots_left":\#(spots),"reservation_status":\#(status),"time_zone":"\#(zone)","checked_in_at":\#(checkedInAt),"invitation_note":\#(note),"report_issue_url":\#(report),"cancelled":\#(cancelled),"booking_opens_at":\#(opens),"early_booking":\#(early)}"#
 }
-private func listJSON(_ rows: String...) -> String { #"{"events":[\#(rows.joined(separator: ","))]}"# }
+private func listJSON(_ rows: String...) -> String { listJSON(rows) }
+private func listJSON(_ rows: [String]) -> String { #"{"events":[\#(rows.joined(separator: ","))]}"# }
 private let icsText = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nSUMMARY:Park Cleanup\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
 private let reservedJSON = #"{"status":"RESERVED"}"#
 private let cancelledJSON = #"{"status":"CANCELLED"}"#
@@ -86,6 +87,24 @@ final class WireEventsTests: XCTestCase {
         XCTAssertEqual(call.request.headerFields[nativeClientHeader], "native")
     }
 
+    func testTheRowCapKeepsTheSoonestEventsNotTheFirstReturned() async throws {
+        let base = Date(timeIntervalSince1970: 1_800_000_000)
+        let format = ISO8601DateFormatter()
+        // Latest first: the cap must apply after sorting, or the soonest events are the ones dropped.
+        let rows = (0..<250).reversed().map { index -> String in
+            let start = base.addingTimeInterval(Double(index) * 3_600)
+            return eventJSON(id: String(format: "22222222-0000-4000-8000-%012d", index), start: format.string(from: start),
+                             end: format.string(from: start.addingTimeInterval(3_600)))
+        }
+        let rig = try make(ScriptedTransport { seen, _ in
+            seen.request.path == "/donor/me/events/invite-only" ? (.ok, listJSON()) : (.ok, listJSON(rows))
+        })
+        let events = try await rig.service.events()
+        XCTAssertEqual(events.count, WireEvents.eventRowLimit)
+        XCTAssertEqual(events.first?.startsAt, base)
+        XCTAssertEqual(events.last?.startsAt, base.addingTimeInterval(199 * 3_600))
+    }
+
     func testEventFieldsMapIncludingUncappedAndOptionalFields() async throws {
         let rig = try make(ScriptedTransport { seen, _ in
             seen.request.path == "/donor/me/events/invite-only" ? (.ok, listJSON())
@@ -120,7 +139,8 @@ final class WireEventsTests: XCTestCase {
     }
 
     func testUnknownReservationResultStatusIsNotASuccess() async throws {
-        for json in [#"{"status":"PENDING"}"#] {
+        for status in ["PENDING", "HELD"] {
+            let json = #"{"status":"\#(status)"}"#
             let reserve = try make(ScriptedTransport { _, _ in (.ok, json) })
             do { _ = try await reserve.service.reserve(eventID: eventA); XCTFail() } catch { XCTAssertEqual(error as? AccountError, .invalidResponse) }
             let cancel = try make(ScriptedTransport { _, _ in (.ok, json) })
@@ -395,6 +415,10 @@ final class WireEventsTests: XCTestCase {
         let big = "BEGIN:VCALENDAR\r\n" + String(repeating: "X-PAD:1\r\n", count: 20_000)
         let rig = try make(ScriptedTransport { _, _ in (.ok, big) })
         do { _ = try await rig.service.calendar(eventID: eventA); XCTFail() } catch { assertBodyRejected(error) }
+    }
+
+    func testCalendarCancellationIsNotReportedAsAnInvalidBody() async throws {
+        try await assertCancellation(icsText) { _ = try await $0.calendar(eventID: eventA) }
     }
 
     func testCalendarRefusesAMalformedID() async throws {

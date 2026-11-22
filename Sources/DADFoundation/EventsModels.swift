@@ -2,7 +2,7 @@ import Foundation
 
 // Events view models + the service seam. The models own explicit load/ready/failed state and
 // the reserve/cancel/check-in transitions, so they are unit-tested without a network, a camera,
-// or UI — the same shape as the giving and engagement models.
+// or UI.
 
 /// The seam the events models call. A conformer maps to the generated client (WireEvents) or a
 /// preview/test double; all value types so the models stay testable. The server is
@@ -72,8 +72,6 @@ public struct CheckInResultValue: Sendable, Equatable {
     }
 }
 
-// MARK: - Calendar export (E-6)
-
 /// An `.ics` file written to disk for the system share sheet. Opening it with Calendar adds the
 /// event; no calendar permission or entitlement is involved because the app never reads or writes
 /// the donor's calendar itself.
@@ -91,12 +89,10 @@ public enum CalendarExport {
         let folder = directory.appendingPathComponent("dad-calendar", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let url = folder.appendingPathComponent("\(safe.isEmpty ? "event" : safe).ics")
-        try data.write(to: url, options: .atomic)
+        try data.write(to: url, options: [.atomic, .completeFileProtection])
         return url
     }
 }
-
-// MARK: - Events list/detail model (E-2, E-3, E-4, E-9)
 
 /// Drives the events list and detail. One load fetches the list; reserving/cancelling updates
 /// the affected event in place so the list and detail re-render without a full reload. A failed
@@ -126,6 +122,8 @@ public final class EventsModel {
     /// The prepared `.ics`, ready for the share sheet.
     public private(set) var calendarFile: CalendarFile?
     public private(set) var calendarPreparing: String?
+    /// Why a refresh failed while earlier rows stay on screen.
+    public private(set) var refreshNotice: String?
 
     private let service: any EventsService
     private let exportDirectory: URL
@@ -137,7 +135,8 @@ public final class EventsModel {
 
     public func load() async {
         let prior = phase
-        phase = .loading
+        if events.isEmpty { phase = .loading }
+        refreshNotice = nil
         do {
             events = try await service.events()
             phase = .ready
@@ -145,7 +144,8 @@ public final class EventsModel {
             phase = prior
         } catch {
             noteSignedOut(error)
-            phase = .failed(error.eventMessage(for: .load))
+            let message = error.eventMessage(for: .load)
+            if events.isEmpty { phase = .failed(message) } else { phase = .ready; refreshNotice = message }
         }
     }
 
@@ -215,7 +215,10 @@ public final class EventsModel {
         }
     }
 
-    public func clearCalendar() { calendarFile = nil }
+    public func clearCalendar() {
+        if let file = calendarFile { try? FileManager.default.removeItem(at: file.url) }
+        calendarFile = nil
+    }
 
     /// Re-fetch one event after a mutation and splice it back into the list in place.
     private func refresh(eventID: String, assuming status: ReservationStatus) async {
@@ -242,7 +245,9 @@ public final class EventsModel {
         actionErrorEventID = eventID
         switch error as? AccountError {
         case .conflict?, .notFound?:
-            if let fresh = try? await service.events() { events = fresh }
+            // Another command's own refresh would be overwritten by this older list.
+            guard busy.subtracting([eventID]).isEmpty else { return }
+            do { events = try await service.events() } catch { noteSignedOut(error) }
         default: break
         }
     }
@@ -256,16 +261,11 @@ public final class EventsModel {
 extension DonorEvent {
     /// The same event with a different reservation status (the server's own count is fetched on refresh).
     func with(status: ReservationStatus) -> DonorEvent {
-        DonorEvent(
-            id: id, slug: slug, title: title, type: type, venue: venue, city: city, startsAt: startsAt, endsAt: endsAt,
-            capacity: capacity, spotsLeft: spotsLeft, status: status, invitationNote: invitationNote,
-            reportIssueURL: reportIssueURL, cancelled: cancelled, bookingOpensAt: bookingOpensAt,
-            earlyBooking: earlyBooking, details: details, address: address,
-            timeZoneID: timeZoneID, checkedInAt: checkedInAt)
+        var copy = self
+        copy.status = status
+        return copy
     }
 }
-
-// MARK: - Check-in model (E-8)
 
 /// Drives the QR check-in flow. The camera scanner (a device seam, validated structurally) feeds
 /// a scanned code in; this model applies the client-side window pre-check, calls the service, and
@@ -330,5 +330,4 @@ public final class CheckInModel {
     }
 
     public func reset() { state = .idle }
-
 }

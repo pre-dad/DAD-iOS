@@ -63,8 +63,66 @@ final class WireAccountSettingsTests: XCTestCase {
         let transport = ScriptedTransport { seen, _ in seen.request.method == .post ? (.conflict, "{}") : (.ok, profileJSON()) }
         let rig = try make(transport)
         let current = try await rig.settings.load().preferences
-        do { _ = try await rig.settings.savePreferences(try current.addingInterest("Tutoring").get()); XCTFail() }
-        catch { XCTAssertEqual(error as? AccountError, .unavailable) }
+        do { _ = try await rig.settings.savePreferences(try current.addingInterest("Tutoring").get()); XCTFail("savePreferences must throw") }
+        catch { XCTAssertEqual(error as? AccountError, .conflict) }
+    }
+
+    @MainActor func testAStaleSettingsSaveRefreshesBeforeTheDonorRetriesWithoutOverwritingOtherChoices() async throws {
+        let fresh = profileJSON(version: 4)
+            .replacingOccurrences(of: #""network_visible":true"#, with: #""network_visible":false"#)
+            .replacingOccurrences(of: #""marketing_emails":false"#, with: #""marketing_emails":true"#)
+        let transport = ScriptedTransport { seen, index in
+            if seen.request.method == .get { return (.ok, index == 0 ? profileJSON() : fresh) }
+            return index == 1 ? (.conflict, "{}") : (.ok, fresh.replacingOccurrences(of: #""version":4"#, with: #""version":5"#))
+        }
+        let rig = try make(transport)
+        let model = AccountSettingsModel(service: rig.settings)
+        await model.load()
+        await model.toggle("push_streak_at_risk", false)
+        XCTAssertEqual(model.snapshot?.preferences.version, 4)
+        XCTAssertFalse(try XCTUnwrap(model.snapshot).preferences.networkVisible)
+        XCTAssertTrue(try XCTUnwrap(model.snapshot).preferences.marketingEmails)
+        XCTAssertNotNil(model.actionError)
+        XCTAssertEqual(transport.calls(to: "/donor/me/preferences").count, 1, "a stale block is never replayed automatically")
+
+        await model.toggle("push_streak_at_risk", false)
+        let post = try XCTUnwrap(transport.calls(to: "/donor/me/preferences").last)
+        let sent = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(post.body.utf8)) as? [String: Any])
+        XCTAssertEqual(sent["version"] as? Int, 4)
+        XCTAssertEqual(sent["network_visible"] as? Bool, false)
+        XCTAssertEqual(sent["marketing_emails"] as? Bool, true)
+        XCTAssertEqual(sent["push_streak_at_risk"] as? Bool, false)
+        XCTAssertNil(model.actionError)
+        XCTAssertEqual(model.snapshot?.preferences.version, 5)
+    }
+
+    @MainActor func testAConflictWhoseRefreshFailsOffersALoadRetry() async throws {
+        let transport = ScriptedTransport { seen, index in
+            if seen.request.method == .post { return (.conflict, "{}") }
+            return index == 2 ? (.serviceUnavailable, "{}") : (.ok, profileJSON(version: index == 0 ? 3 : 4))
+        }
+        let model = AccountSettingsModel(service: try make(transport).settings)
+        await model.load()
+        let added = await model.addInterest("Tutoring")
+        XCTAssertFalse(added)
+        guard case .failed = model.phase else { return XCTFail("the screen must offer a load retry") }
+        XCTAssertFalse(model.isBusy)
+        await model.load()
+        XCTAssertEqual(model.phase, .ready)
+        XCTAssertEqual(model.snapshot?.preferences.version, 4)
+    }
+
+    @MainActor func testAnEndedSessionLeavesSettingsForLoadsSavesAndDeletion() async throws {
+        for action in ["load", "save", "delete"] {
+            let transport = ScriptedTransport { _, index in
+                index == 0 && action != "load" ? (.ok, profileJSON()) : (.unauthorized, "{}")
+            }
+            let model = AccountSettingsModel(service: try make(transport).settings)
+            await model.load()
+            if action == "save" { await model.toggle("marketing_emails", true) }
+            if action == "delete" { await model.deleteAccount(DeleteAccountGate(typed: "DELETE")) }
+            XCTAssertTrue(model.signedOut, action)
+        }
     }
 
     func testDeleteWipesCredentialsAndLocalDataWithoutALogoutCall() async throws {
@@ -84,7 +142,7 @@ final class WireAccountSettingsTests: XCTestCase {
     func testDeleteBlockedBy409KeepsTheSessionAndExplains() async throws {
         let transport = ScriptedTransport { _, _ in (.conflict, "{}") }
         let rig = try make(transport)
-        do { try await rig.settings.deleteAccount(); XCTFail() }
+        do { try await rig.settings.deleteAccount(); XCTFail("deleteAccount must throw") }
         catch {
             XCTAssertEqual(error as? AccountError, .deletionBlocked)
             XCTAssertTrue(error.userMessage.contains("Cancel your monthly gift"))
@@ -125,7 +183,7 @@ final class WireAccountSettingsTests: XCTestCase {
 
     func testDeleteWhenRefreshIsRevokedEndsSignedOutWithoutWipingAppData() async throws {
         let rig = try make(ScriptedTransport { _, _ in (.unauthorized, "{}") })
-        do { try await rig.settings.deleteAccount(); XCTFail() }
+        do { try await rig.settings.deleteAccount(); XCTFail("deleteAccount must throw") }
         catch { XCTAssertEqual(error as? AccountError, .signedOut) }
         XCTAssertNil(try rig.store.load())
         XCTAssertEqual(rig.wiped.count, 0, "nothing was deleted server-side")
@@ -143,6 +201,9 @@ final class WireAccountSettingsTests: XCTestCase {
         let results = [await first.result, await second.result]
         XCTAssertTrue(results.contains { if case .success = $0 { true } else { false } })
         XCTAssertEqual(transport.calls(to: "/donor/refresh").count, 1, "refresh is single-flight")
+        let succeeded = results.filter { if case .success = $0 { true } else { false } }.count
+        XCTAssertEqual(rig.wiped.count, succeeded, "local data is wiped once per completed delete")
+        XCTAssertGreaterThanOrEqual(transport.calls(to: "/donor/me/delete").count, succeeded)
     }
 
     func testSignOutClearsLocalFirstAndToleratesRemoteFailure() async throws {

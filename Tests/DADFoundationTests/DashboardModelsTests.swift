@@ -12,12 +12,15 @@ private final class ScriptedDashboard: DashboardService, @unchecked Sendable {
     var summary: Result<AnnualGivingSummary, Error> = .failure(AccountError.unavailable)
     var pageGate: Gate?
     private(set) var requestedOffsets: [Int] = []
+    private var returnedPages = 0
+    var pagesReturned: Int { lock.withLock { returnedPages } }
 
     private func next<T>(_ list: inout [T]) -> T { list.count > 1 ? list.removeFirst() : list[0] }
     func dashboard() async throws -> DashboardState { try lock.withLock { try next(&dashboards).get() } }
     func todayInitiative() async throws -> TodayInitiative? { try lock.withLock { try next(&initiatives).get() } }
     func gifts(offset: Int) async throws -> GiftHistoryPage {
         lock.withLock { requestedOffsets.append(offset) }
+        defer { lock.withLock { returnedPages += 1 } }
         if let pageGate { await pageGate.pass() }
         try Task.checkCancellation()
         return try lock.withLock { try (pages[offset] ?? .failure(AccountError.unavailable)).get() }
@@ -35,6 +38,19 @@ private let sampleDashboard = DonorDashboard(
     rank: .notRankedYet, impact: ImpactTotals(givenMinor: 5000, initiativesFunded: 1, eventsVolunteered: 0), network: nil, referrals: nil)
 
 private let sampleToday = TodayInitiative(id: "i", slug: "s", title: "Meals", summary: "x", location: "Austin", kind: "PROGRAM", startedOn: "2025-01-01", metrics: [])
+
+final class RankingLabelTests: XCTestCase {
+    func testBothRankCardsClampAndOmitTheSameWay() {
+        XCTAssertEqual(DashboardRank(topPercent: 0, city: nil, cityRank: nil).nationalLabel, "Top 1% nationally")
+        XCTAssertEqual(DashboardRank(topPercent: 250, city: nil, cityRank: nil).nationalLabel, "Top 100% nationally")
+        XCTAssertEqual(RankingStanding(nationalPercentile: 0, city: nil, cityRank: nil).nationalLabel, "Top 1% nationally")
+        XCTAssertEqual(RankingStanding(nationalPercentile: 250, city: nil, cityRank: nil).nationalLabel, "Top 100% nationally")
+        XCTAssertNil(RankingStanding(nationalPercentile: nil, city: nil, cityRank: nil).nationalLabel)
+        XCTAssertNil(DashboardRank(topPercent: 2, city: "", cityRank: 4).cityLabel)
+        XCTAssertNil(RankingStanding(nationalPercentile: 2, city: "", cityRank: 4).cityLabel)
+        XCTAssertEqual(RankingStanding(nationalPercentile: 2, city: "Austin", cityRank: 4).cityLabel, "#4 in Austin")
+    }
+}
 
 @MainActor final class DashboardModelTests: XCTestCase {
     func testLoadShowsDashboardAndInitiative() async {
@@ -119,6 +135,9 @@ private let sampleToday = TodayInitiative(id: "i", slug: "s", title: "Meals", su
     }
 }
 
+/// Lets the model's continuation after a returned service call run before the test asserts.
+@MainActor private func settle() async { for _ in 0..<10 { await Task.yield() } }
+
 @MainActor final class GiftHistoryModelTests: XCTestCase {
     private func make(_ service: ScriptedDashboard) -> GiftHistoryModel { GiftHistoryModel(service: service, year: 2026) }
 
@@ -131,7 +150,7 @@ private let sampleToday = TodayInitiative(id: "i", slug: "s", title: "Meals", su
         XCTAssertEqual(model.gifts.map(\.id), ["a", "b"])
         XCTAssertTrue(model.hasMore)
         model.requestMore()
-        while model.isLoadingMore { await Task.yield() }
+        await waitUntil { !model.isLoadingMore }
         XCTAssertEqual(model.gifts.map(\.id), ["a", "b", "c"])
         XCTAssertFalse(model.hasMore)
         model.requestMore()
@@ -164,13 +183,13 @@ private let sampleToday = TodayInitiative(id: "i", slug: "s", title: "Meals", su
         let model = make(service)
         await model.load()
         model.requestMore()
-        while model.isLoadingMore { await Task.yield() }
+        await waitUntil { !model.isLoadingMore }
         XCTAssertEqual(model.gifts.map(\.id), ["a"])
         XCTAssertEqual(model.moreError, "Too many attempts. Please wait a moment and try again.")
         XCTAssertTrue(model.hasMore)
         service.pages[1] = .success(GiftHistoryPage(gifts: [gift("b")], nextOffset: nil))
         model.requestMore()
-        while model.isLoadingMore { await Task.yield() }
+        await waitUntil { !model.isLoadingMore }
         XCTAssertEqual(model.gifts.map(\.id), ["a", "b"])
         XCTAssertNil(model.moreError)
     }
@@ -182,7 +201,7 @@ private let sampleToday = TodayInitiative(id: "i", slug: "s", title: "Meals", su
         let model = make(service)
         await model.load()
         model.requestMore()
-        while model.isLoadingMore { await Task.yield() }
+        await waitUntil { !model.isLoadingMore }
         XCTAssertEqual(model.gifts.map(\.id), ["a", "b", "c"])
     }
 
@@ -218,7 +237,8 @@ private let sampleToday = TodayInitiative(id: "i", slug: "s", title: "Meals", su
         await gate.waitUntilEntered()
         model.cancel()
         await gate.release()
-        await Task.yield()
+        await waitUntil { service.pagesReturned == 2 }
+        await settle()
         XCTAssertEqual(model.gifts.map(\.id), ["a"], "a cancelled page must not append")
         XCTAssertFalse(model.isLoadingMore)
         XCTAssertNil(model.moreError, "cancellation is not an error")
@@ -237,7 +257,8 @@ private let sampleToday = TodayInitiative(id: "i", slug: "s", title: "Meals", su
         service.pages[0] = .success(GiftHistoryPage(gifts: [gift("fresh")], nextOffset: nil))
         await model.load()
         await gate.release()
-        await Task.yield()
+        await waitUntil { service.pagesReturned == 3 }
+        await settle()
         XCTAssertEqual(model.gifts.map(\.id), ["fresh"])
     }
 
@@ -271,5 +292,16 @@ private let sampleToday = TodayInitiative(id: "i", slug: "s", title: "Meals", su
         XCTAssertEqual(model.receipt, .failed("zzz", "Something went wrong. Please try again."))
         model.hideReceipt()
         XCTAssertNil(model.receipt)
+    }
+}
+
+final class MilestoneLineTests: XCTestCase {
+    func testEachMilestoneSaysWhatItReached() {
+        XCTAssertEqual(milestoneLine(days: 7), "7 days. A full week of aid, on the record.")
+        XCTAssertEqual(milestoneLine(days: 30), "30 days. That’s a month of aid, on the record.")
+        XCTAssertEqual(milestoneLine(days: 100), "100 days. Triple digits, on the record.")
+        XCTAssertEqual(milestoneLine(days: 365), "365 days. A full year of aid, on the record.")
+        XCTAssertEqual(milestoneLine(days: 500), "500 days. Every one on the record.")
+        XCTAssertEqual(milestoneLine(days: 1_095), "1095 days. Every one on the record.")
     }
 }

@@ -3,16 +3,6 @@ import HTTPTypes
 import XCTest
 @testable import DADFoundation
 
-final class KeptReferral: @unchecked Sendable {
-    private let lock = NSLock()
-    private var token: String?
-    init(_ token: String?) { self.token = token }
-    var value: String? {
-        get { lock.withLock { token } }
-        set { lock.withLock { token = newValue } }
-    }
-}
-
 private final class MemoryLinkTokens: LinkTokenStore, @unchecked Sendable {
     private let lock = NSLock()
     private var tokens: LinkTokens
@@ -142,5 +132,37 @@ final class LinkAttributionTests: XCTestCase {
         XCTAssertEqual(DefaultsLinkTokenStore(defaults: defaults, key: "t").load(), LinkTokens(referral: kept))
         store.save(LinkTokens())
         XCTAssertNil(defaults.data(forKey: "t"))
+    }
+
+    func testOverlappingVisitsCarryThePreviousTokenAndKeepTheLatestTouch() async throws {
+        for company in [false, true] {
+            let firstResponse = Gate()
+            let secondStarted = Gate()
+            let first = String(repeating: "a", count: 43)
+            let second = String(repeating: "b", count: 43)
+            let transport = ScriptedTransport { _, index in
+                if index == 0 { await firstResponse.pass() }
+                let token = index == 0 ? first : second
+                return (.ok, company ? #"{"captured":true,"token":"\#(token)"}"#
+                        : #"{"captured":true,"public_name":"Second","token":"\#(token)"}"#)
+            }
+            let (attribution, links, _) = try make(transport)
+            let visit: @Sendable (String) async -> Void = { code in
+                if company { await attribution.captureCompany(code: code) }
+                else { await attribution.captureReferral(code: code, inPerson: false) }
+            }
+            let earlier = Task { await visit("FIRST") }
+            await firstResponse.waitUntilEntered()
+            let later = Task { await secondStarted.release(); await visit("SECOND") }
+            await secondStarted.pass()
+            try await Task.sleep(for: .milliseconds(30))
+            await firstResponse.release()
+            await earlier.value
+            await later.value
+            XCTAssertEqual(links.load(), company ? LinkTokens(company: second) : LinkTokens(referral: second))
+            XCTAssertEqual(transport.seen.count, 2)
+            XCTAssertEqual(try body(transport.seen[1])["token"] as? String, first,
+                           "the server must see a chain of visits, even when two links arrive together")
+        }
     }
 }

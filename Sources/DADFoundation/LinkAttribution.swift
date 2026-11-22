@@ -108,6 +108,7 @@ public final class LinkAttribution: @unchecked Sendable {
     private let store: any LinkTokenStore
     private let captured: @Sendable (String) -> Void
     private let lock = NSLock()
+    private var captureTail: Task<Void, Never>?
 
     /// `captured` receives the `attribution_captured` source (`link`, `IRL` or `company`) of each visit kept.
     public init(service: any LinkAttributionService, store: any LinkTokenStore, captured: @escaping @Sendable (String) -> Void = { _ in }) {
@@ -117,6 +118,10 @@ public final class LinkAttribution: @unchecked Sendable {
     /// Records a referral visit and returns the referrer's public name, if the server named one.
     @discardableResult
     public func captureReferral(code: String, inPerson: Bool) async -> String? {
+        await enqueue { await self.referralVisit(code: code, inPerson: inPerson) }.value
+    }
+
+    private func referralVisit(code: String, inPerson: Bool) async -> String? {
         guard let result = try? await service.captureReferral(code: code, inPerson: inPerson, token: store.load().referral) else { return nil }
         update { $0.referral = result.token }
         if result.token != nil { captured(inPerson ? "IRL" : "link") }
@@ -124,6 +129,10 @@ public final class LinkAttribution: @unchecked Sendable {
     }
 
     public func captureCompany(code: String) async {
+        await enqueue { await self.companyVisit(code: code) }.value
+    }
+
+    private func companyVisit(code: String) async {
         // A thrown error is a transient failure: keep whatever token was stored. A successful call that
         // returns nil means the visit kept no company window, so the stored token must be discarded —
         // mirroring `captureReferral`. `try?` would flatten the `String??` and lose that distinction
@@ -138,6 +147,10 @@ public final class LinkAttribution: @unchecked Sendable {
     /// Binds a kept company token to the signed-in donor. The token is spent once the server has answered
     /// either way (bound, or naming nothing); a transient failure keeps it for the next sign-in.
     public func bindCompany() async {
+        await enqueue { await self.bindCompanyVisit() }.value
+    }
+
+    private func bindCompanyVisit() async {
         guard let token = store.load().company else { return }
         do { _ = try await service.bindCompanyTouch(token: token) }
         catch AccountError.invalidInput {}
@@ -146,6 +159,20 @@ public final class LinkAttribution: @unchecked Sendable {
     }
 
     public var referralToken: String? { store.load().referral }
+
+    private func enqueue<T: Sendable>(_ work: @escaping @Sendable () async -> T) -> Task<T, Never> {
+        lock.withLock {
+            // The next visit must send the previous visit's token. Serializing the whole exchange
+            // also prevents a slow response from restoring an older touch, including on the server.
+            let previous = captureTail
+            let task = Task {
+                await previous?.value
+                return await work()
+            }
+            captureTail = Task { _ = await task.value }
+            return task
+        }
+    }
 
     private func update(_ change: (inout LinkTokens) -> Void) {
         lock.withLock {

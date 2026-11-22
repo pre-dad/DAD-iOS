@@ -45,7 +45,7 @@ struct EventsScreen: View {
         }
         .onChange(of: model.signedOut) { _, signedOut in if signedOut { onSignedOut() } }
         // Success haptic when a seat is reserved / waitlisted.
-        .sensoryFeedback(.success, trigger: model.lastOutcome)
+        .sensoryFeedback(.success, trigger: model.lastOutcome) { _, outcome in outcome != nil }
         .sheet(item: calendarBinding) { file in
             ShareSheet(url: file.url, onDone: { model.clearCalendar() }).ignoresSafeArea()
         }
@@ -66,6 +66,9 @@ struct EventsScreen: View {
                     .buttonStyle(DADButtonStyle(.primary)).accessibilityIdentifier("events-retry")
             }
         case .ready:
+            if let notice = model.refreshNotice {
+                Text(notice).foregroundStyle(Color.dad("fail")).accessibilityIdentifier("events-refresh-notice")
+            }
             if let outcome = model.lastOutcome {
                 DADCard {
                     VStack(alignment: .leading, spacing: 4) {

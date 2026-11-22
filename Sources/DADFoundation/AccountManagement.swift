@@ -22,9 +22,10 @@ public struct TeamStanding: Sendable, Equatable, Identifiable {
     public let annualizedMinor: Int64
     public let avgStreakDays: Int64
     public let volunteerMinutes: Int64
-    public init(id: String, name: String, activeGivers: Int64, annualizedMinor: Int64, avgStreakDays: Int64, volunteerMinutes: Int64) {
+    public let metricsVerified: Bool
+    public init(id: String, name: String, activeGivers: Int64, annualizedMinor: Int64, avgStreakDays: Int64, volunteerMinutes: Int64, metricsVerified: Bool = false) {
         self.id = id; self.name = name; self.activeGivers = activeGivers; self.annualizedMinor = annualizedMinor
-        self.avgStreakDays = avgStreakDays; self.volunteerMinutes = volunteerMinutes
+        self.avgStreakDays = avgStreakDays; self.volunteerMinutes = volunteerMinutes; self.metricsVerified = metricsVerified
     }
 }
 
@@ -41,7 +42,7 @@ public struct EmployerTeam: Sendable, Equatable {
 
 public protocol AccountManagementService: Sendable {
     /// Empty strings clear a field. Returns the saved profile.
-    func saveProfile(zip: String, city: String, phone: String) async throws -> AccountProfileSummary
+    func saveProfile(zip: String, city: String, phone: String, timezoneOverride: String?) async throws -> AccountProfileSummary
     /// Starts the two-step change: a confirmation goes to the current address first.
     func requestEmailChange(to email: String) async throws
     func sessions() async throws -> [DeviceSessionSummary]
@@ -53,6 +54,25 @@ public protocol AccountManagementService: Sendable {
     /// Returns the linked organization's name.
     func enroll(companyCode: String) async throws -> String
     func joinTeam(name: String) async throws
+}
+
+public extension AccountManagementService {
+    func saveProfile(zip: String, city: String, phone: String) async throws -> AccountProfileSummary {
+        try await saveProfile(zip: zip, city: city, phone: phone, timezoneOverride: nil)
+    }
+}
+
+public enum StreakTimeZone {
+    public static let choices: [(value: String, label: String)] = [
+        ("", "Use ZIP suggestion"),
+        ("America/New_York", "Eastern"), ("America/Chicago", "Central"),
+        ("America/Denver", "Mountain"), ("America/Phoenix", "Arizona"),
+        ("America/Los_Angeles", "Pacific"), ("America/Anchorage", "Alaska"),
+        ("America/Adak", "Aleutian Islands"), ("Pacific/Honolulu", "Hawaii"),
+        ("America/Puerto_Rico", "Puerto Rico / US Virgin Islands"),
+        ("Pacific/Guam", "Guam / Northern Mariana Islands"),
+        ("Pacific/Pago_Pago", "American Samoa")
+    ]
 }
 
 public enum ProfileRules {
@@ -91,12 +111,14 @@ public final class ProfileDetailsModel {
     public var zip: String
     public var city: String
     public var phone: String
+    public var timezoneOverride: String
     public private(set) var phase: Phase = .idle
     private let service: any AccountManagementService
 
     public init(profile: AccountProfileSummary, service: any AccountManagementService) {
         self.profile = profile; self.service = service
         zip = profile.zip ?? ""; city = profile.city ?? ""; phone = profile.phone ?? ""
+        timezoneOverride = profile.timezoneOverride ?? ""
     }
 
     public var zipValid: Bool { ProfileRules.isAcceptableZip(zip) }
@@ -106,17 +128,18 @@ public final class ProfileDetailsModel {
     private var trimmedZip: String { zip.trimmingCharacters(in: .whitespaces) }
 
     public var changed: Bool {
-        trimmedZip != (profile.zip ?? "") || trimmedCity != (profile.city ?? "") || ProfileRules.e164(phone) != (profile.phone ?? "")
+        timezoneOverride != (profile.timezoneOverride ?? "") || trimmedZip != (profile.zip ?? "") || trimmedCity != (profile.city ?? "") || ProfileRules.e164(phone) != (profile.phone ?? "")
     }
 
-    public var canSave: Bool { zipValid && phoneValid && cityValid && changed && phase != .saving }
+    public var canSave: Bool { zipValid && phoneValid && cityValid && StreakTimeZone.choices.contains(where: { $0.value == timezoneOverride }) && changed && phase != .saving }
 
     public func save() async {
         guard canSave, let phone = ProfileRules.e164(phone) else { return }
         phase = .saving
         do {
-            profile = try await service.saveProfile(zip: trimmedZip, city: trimmedCity, phone: phone)
+            profile = try await service.saveProfile(zip: trimmedZip, city: trimmedCity, phone: phone, timezoneOverride: timezoneOverride)
             zip = profile.zip ?? ""; city = profile.city ?? ""; self.phone = profile.phone ?? ""
+            timezoneOverride = profile.timezoneOverride ?? ""
             phase = .saved
         } catch where error.isCancellation {
             phase = .idle
@@ -193,6 +216,8 @@ public final class DeviceSessionsModel {
             phase = .ready
         } catch where error.isCancellation {
             return
+        } catch AccountError.signedOut {
+            signedOut = true
         } catch {
             phase = .failed("Your signed-in devices couldn’t be loaded right now. Please try again in a moment.")
         }
@@ -240,20 +265,24 @@ public final class EmployerModel {
     public var teamName = ""
     public private(set) var isBusy = false
     public private(set) var actionError: String?
+    /// True once the server reports the session ended, so the screen leaves the signed-in shell.
+    public private(set) var signedOut = false
     private let service: any AccountManagementService
+    private static let teamNameLimit = 80
 
     public init(service: any AccountManagementService) { self.service = service }
 
     public var canEnroll: Bool { !companyCode.trimmingCharacters(in: .whitespaces).isEmpty && !isBusy }
     public var canJoinTeam: Bool {
         let name = teamName.trimmingCharacters(in: .whitespaces)
-        return !name.isEmpty && name.count <= 80 && !isBusy
+        return !name.isEmpty && name.count <= Self.teamNameLimit && !isBusy
     }
 
     public func load() async {
         phase = .loading
         do { phase = .ready(try await service.employer()) }
         catch where error.isCancellation { return }
+        catch AccountError.signedOut { signedOut = true }
         catch { phase = .failed("Your employer details couldn’t be loaded right now. Please try again in a moment.") }
     }
 
@@ -271,7 +300,7 @@ public final class EmployerModel {
     public func joinTeam() async {
         guard canJoinTeam else { return }
         let name = teamName.trimmingCharacters(in: .whitespaces)
-        await act(invalid: "That team name couldn’t be saved. Use up to 80 characters.", conflict: nil) {
+        await act(invalid: "That team name couldn’t be saved. Use up to \(Self.teamNameLimit) characters.", conflict: nil) {
             try await self.service.joinTeam(name: name)
             self.teamName = ""
         }
@@ -283,15 +312,25 @@ public final class EmployerModel {
         actionError = nil
         do {
             try await work()
-            phase = .ready(try await service.employer())
         } catch where error.isCancellation {
+            return
+        } catch AccountError.signedOut {
+            signedOut = true
             return
         } catch AccountError.invalidInput {
             actionError = invalid
+            return
         } catch AccountError.conflict where conflict != nil {
             actionError = conflict
+            return
         } catch {
             actionError = error.userMessage
+            return
         }
+        // The change is saved; a failed refresh must not read as a failed save.
+        do { phase = .ready(try await service.employer()) }
+        catch where error.isCancellation { return }
+        catch AccountError.signedOut { signedOut = true }
+        catch { actionError = "Saved, but we couldn’t refresh your employer details. Reopen this screen to see them." }
     }
 }

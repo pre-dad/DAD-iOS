@@ -7,8 +7,6 @@ import Foundation
 // Each method is switched on only by `SignInCapabilities`, which needs build-time configuration
 // the project does not ship with, so by default they are hidden from the sign-in screen.
 
-// MARK: - Capability gating
-
 /// Raw build configuration, read from Info.plist keys that expand from build settings. All three
 /// are empty in the repository: the owner supplies them (see README "Switching on Apple, Google and passkeys").
 public struct SignInConfig: Sendable, Equatable {
@@ -52,11 +50,15 @@ public struct SignInCapabilities: Sendable, Equatable {
         }
     }
 
-    /// True when any optional method is hidden, so the screen can say so in plain text.
-    public var hasUnavailableMethod: Bool { !(apple && google && passkey) }
+    /// Plain-text explanation naming only the methods this build cannot offer, so the screen can say
+    /// why they are hidden; nil when all are on.
+    public var unavailableNote: String? {
+        let names = [(apple, "Apple"), (google, "Google"), (passkey, "passkey")].filter { !$0.0 }.map(\.1)
+        guard let last = names.last else { return nil }
+        let list = names.count == 1 ? last : names.dropLast().joined(separator: ", ") + " and " + last
+        return "\(list) sign-in \(names.count == 1 ? "isn’t" : "aren’t") available in this build yet."
+    }
 }
-
-// MARK: - Seams
 
 public enum OIDCProvider: String, Sendable, Equatable, CaseIterable {
     case apple, google
@@ -153,8 +155,6 @@ extension PasskeyAssertion {
         ]
     }
 }
-
-// MARK: - Models
 
 /// Shared phase for the one-tap external methods.
 public enum ExternalSignInPhase: Equatable {

@@ -48,10 +48,11 @@ public struct GiftAmount: Sendable, Equatable, Hashable, Comparable {
     public var monthlyLabel: String { "$\(monthlyMinor / 100)/mo" }
 }
 
-/// Format an integer-cents USD figure as "$12.34" / "$150" / "$1,240". Whole-dollar amounts drop
+/// Format an integer-cents USD figure as "$12.34" / "$150" / "$1,240" / "-$12.34". Whole-dollar amounts drop
 /// the decimals; thousands are grouped for readability (WCAG). Display-only, never used for
 /// arithmetic. The formatter is pinned to en_US_POSIX so grouping is stable regardless of host
-/// locale, and cached because NumberFormatter construction is expensive.
+/// locale, and cached because NumberFormatter construction is expensive. Cents are split with integer math,
+/// so no value rounds through a Double.
 private let usdWholeFormatter: NumberFormatter = {
     let f = NumberFormatter()
     f.numberStyle = .decimal
@@ -63,26 +64,12 @@ private let usdWholeFormatter: NumberFormatter = {
     return f
 }()
 
-private let usdCentsFormatter: NumberFormatter = {
-    let f = NumberFormatter()
-    f.numberStyle = .decimal
-    f.locale = Locale(identifier: "en_US_POSIX")
-    f.usesGroupingSeparator = true
-    f.groupingSeparator = ","
-    f.groupingSize = 3
-    f.decimalSeparator = "."
-    f.minimumFractionDigits = 2
-    f.maximumFractionDigits = 2
-    return f
-}()
-
 public func formatUSDMinor(_ minor: Int) -> String {
-    if minor % 100 == 0 {
-        let whole = usdWholeFormatter.string(from: NSNumber(value: minor / 100)) ?? "\(minor / 100)"
-        return "$\(whole)"
-    }
-    let dollars = usdCentsFormatter.string(from: NSNumber(value: Double(minor) / 100)) ?? String(format: "%.2f", Double(minor) / 100)
-    return "$\(dollars)"
+    let dollars = minor.magnitude / 100
+    let cents = minor.magnitude % 100
+    let whole = usdWholeFormatter.string(from: NSNumber(value: dollars)) ?? "\(dollars)"
+    let sign = minor < 0 ? "-" : ""
+    return cents == 0 ? "\(sign)$\(whole)" : "\(sign)$\(whole).\(cents < 10 ? "0" : "")\(cents)"
 }
 
 /// The recurring gift as the giving screens see it: either none set yet, or an active

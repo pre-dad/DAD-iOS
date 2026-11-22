@@ -2,9 +2,7 @@ import Foundation
 
 // Donor engagement surface (PRD A-*, I-*, R-*, N-*, B-*, K-*). Pure value types and the
 // display/eligibility rules live here so badge state, rankings opt-out, impact formatting
-// and QR payloads are unit-testable without a network, a camera, or UI.
-
-// MARK: - Badges (B-1..B-4)
+// and QR payloads are unit-testable.
 
 /// A single badge as the badges grid renders it. `earned` drives colour vs. greyed, but the
 /// grid must never rely on colour alone (PRD §10 / WCAG): `accessibilityLabel` and the
@@ -85,8 +83,6 @@ public struct BadgeCollection: Sendable, Equatable {
     public var summaryLabel: String { "\(earnedCount) of \(total) earned" }
 }
 
-// MARK: - Rankings (K-1..K-3)
-
 /// A donor's standing. Opt-out is the explicit server flag (`rankings_opted_out`), distinct from
 /// "opted in but not ranked yet" (null rank with the flag false). The UI never renders a zero as
 /// a rank, and there is never a public name list, only the viewer's own percentile/city position.
@@ -112,19 +108,23 @@ public struct RankingStanding: Sendable, Equatable {
     /// "Top 2% nationally" — only when a percentile exists. The server's `national_percentile` is already
     /// the *top* bucket (1 = top 1%, 2 = top 2%), so it is shown as is, never as `100 - p`. Clamped to
     /// 1...100 so a stray value cannot read "Top 0%" or "Top -3%".
-    public var nationalLabel: String? {
-        guard let p = nationalPercentile else { return nil }
-        return "Top \(min(100, max(1, p)))% nationally"
-    }
+    public var nationalLabel: String? { nationalPercentile.map(RankingLabel.national) }
 
     /// "#3 in Austin" — only when both a city and a rank exist.
-    public var cityLabel: String? {
-        guard let city, let rank = cityRank else { return nil }
+    public var cityLabel: String? { RankingLabel.city(city, rank: cityRank) }
+}
+
+/// The ranking lines the dashboard and engagement cards share, so both clamp and omit alike.
+enum RankingLabel {
+    /// "Top 2% nationally"; the percentile is clamped to 1...100 so a stray value cannot read "Top 0%".
+    static func national(_ percent: Int) -> String { "Top \(min(100, max(1, percent)))% nationally" }
+
+    /// "#3 in Austin"; nil unless there is a non-empty city and a rank.
+    static func city(_ city: String?, rank: Int?) -> String? {
+        guard let city, !city.isEmpty, let rank else { return nil }
         return "#\(rank) in \(city)"
     }
 }
-
-// MARK: - Impact (A-*, I-1..I-3)
 
 /// Lifetime impact totals. `givenMinor` is nullable by contract: when the backend hasn't
 /// computed it we show "—", never "$0", so an unknown total is never mistaken for nothing given.
@@ -158,8 +158,6 @@ public struct SpendSlice: Sendable, Equatable, Identifiable {
     }
     public var amountLabel: String { formatUSDMinor(amountMinor) }
 }
-
-// MARK: - Network (N-1..N-3)
 
 /// One opted-in person the donor brought in (N-3): first name and last initial, and whether they still give.
 public struct NetworkInvitee: Sendable, Equatable, Hashable, Identifiable {
@@ -227,8 +225,6 @@ public struct Conversion: Sendable, Equatable, Identifiable {
     public var id: String { "\(convertedAt.timeIntervalSince1970)-\(kind.label)" }
     public init(convertedAt: Date, kind: ConversionKind) { self.convertedAt = convertedAt; self.kind = kind }
 }
-
-// MARK: - Referral / IRL (R-1..R-4)
 
 /// The data behind the invite + IRL screens. Splits link vs. in-real-life attributed giving
 /// and builds the invite URL + QR payload a donor shares. The counts and the conversions list are nil

@@ -3,9 +3,7 @@ import Foundation
 // Partner portal (PRD P-*, EM-*, §7). Pure value types and display rules live here so role
 // gating, the "verified or hidden, never estimated" figure rule (§7.3), <5 suppression (EM-3),
 // and last-updated rendering are unit-testable without a network or UI — the same "pure core,
-// seam for I/O" shape as the donor phases (C/D/E).
-
-// MARK: - Role (§7.2, P-4/P-5)
+// seam for I/O" shape as the donor models.
 
 /// A partner user's role. ADMIN manages users, invites, profile and exports; VIEWER can only
 /// read. Partner accounts can never donate (P-5) — that is enforced by the portal having no
@@ -24,8 +22,6 @@ public enum PartnerRole: String, Sendable, Equatable, Codable {
     public var canEditProfile: Bool { self == .admin }
     public var canExport: Bool { self == .admin }
 }
-
-// MARK: - Verified figures (§7.3 — hidden, never estimated)
 
 /// One headline figure on the Overview. A figure is shown ONLY when the server marks it
 /// verified; an unverified figure is HIDDEN (never estimated, never shown as a guess). This is
@@ -50,8 +46,6 @@ public struct VerifiedCount: Sendable, Equatable {
     }
     public var label: String? { verified ? value.formatted(.number.locale(Locale(identifier: "en_US"))) : nil }
 }
-
-// MARK: - Overview (P-10, §7.3)
 
 /// The partner Overview tiles. Each money/count figure pairs its value with a verified flag so
 /// the UI renders it only when verified. `employeesEnrolled`/`enrolledPercent` are nullable
@@ -109,8 +103,6 @@ public struct PartnerOverview: Sendable, Equatable {
     }
 }
 
-// MARK: - Our People rollup (P-13, EM-3 suppression)
-
 /// The workforce rollup. When `suppressed` is true the group is under the <5 threshold and the
 /// UI must show the suppression notice instead of any individual-level figure (EM-3).
 public struct PartnerPeople: Sendable, Equatable {
@@ -119,20 +111,23 @@ public struct PartnerPeople: Sendable, Equatable {
     public let givenMinor: Int64
     public let matchedMinor: Int64
     public let avgStreakDays: Int64
+    public let streakVerified: Bool
     public let volunteerMinutes: Int64
     public let teams: Int64
     public let suppressed: Bool
 
     public init(enrolled: Int64, workforceSize: Int, givenMinor: Int64, matchedMinor: Int64,
-                avgStreakDays: Int64, volunteerMinutes: Int64, teams: Int64, suppressed: Bool) {
-        self.enrolled = enrolled
+                avgStreakDays: Int64, volunteerMinutes: Int64, teams: Int64, suppressed: Bool, streakVerified: Bool = false) {
         self.workforceSize = workforceSize
-        self.givenMinor = givenMinor
-        self.matchedMinor = matchedMinor
-        self.avgStreakDays = avgStreakDays
-        self.volunteerMinutes = volunteerMinutes
-        self.teams = teams
         self.suppressed = suppressed
+        // A suppressed group carries no individual-level figure, so none can leak through a stored property.
+        self.enrolled = suppressed ? 0 : enrolled
+        self.givenMinor = suppressed ? 0 : givenMinor
+        self.matchedMinor = suppressed ? 0 : matchedMinor
+        self.avgStreakDays = suppressed ? 0 : avgStreakDays
+        self.streakVerified = !suppressed && streakVerified
+        self.volunteerMinutes = suppressed ? 0 : volunteerMinutes
+        self.teams = suppressed ? 0 : teams
     }
 
     /// The total given across the enrolled workforce, or nil when suppressed (<5).
@@ -144,8 +139,6 @@ public struct PartnerPeople: Sendable, Equatable {
         suppressed ? "Fewer than 5 people have enrolled, so individual figures are hidden." : nil
     }
 }
-
-// MARK: - Initiatives (P-11)
 
 public enum InitiativeStatus: String, Sendable, Equatable, Codable {
     case active = "ACTIVE"
@@ -190,7 +183,8 @@ public struct PartnerMetric: Sendable, Equatable {
         case people = "PEOPLE"
         case initiatives = "INITIATIVES"
         case partners = "PARTNERS"
-        public init(contract raw: String) { self = Unit(rawValue: raw) ?? .people }
+        /// Nil for a unit this build does not know, so the figure is hidden rather than shown as a people count (§7.3).
+        public init?(contract raw: String) { self.init(rawValue: raw) }
     }
     public let label: String
     public let value: Int64
@@ -209,8 +203,6 @@ public struct PartnerMetric: Sendable, Equatable {
     }
 }
 
-// MARK: - Users (P-13 management)
-
 public struct PartnerUser: Sendable, Equatable, Identifiable {
     public let id: String
     public let email: String
@@ -223,8 +215,6 @@ public struct PartnerUser: Sendable, Equatable, Identifiable {
         self.role = role
     }
 }
-
-// MARK: - Spend (P-12, totals only)
 
 public struct PartnerSpendCategory: Sendable, Equatable {
     public let category: String

@@ -173,6 +173,16 @@ final class GivingFlowModelTests: XCTestCase {
         XCTAssertEqual(m.phase, .idle)
         XCTAssertEqual(m.notice, "Saved. Your next renewal will be $300.")
         XCTAssertEqual(service.changeScript.count, 1)
+        XCTAssertEqual(m.giftsSaved, 1)
+    }
+
+    func testLoadingAnExistingGiftIsNotASave() async {
+        let service = GivingDouble()
+        service.recurringScript = Script(active())
+        service.offerScript = Script(offer())
+        let m = model(service)
+        await m.load()
+        XCTAssertEqual(m.giftsSaved, 0, "opening the tab on a gift must not fire the success haptic")
     }
 
     func testApplyingTheAmountAlreadyInForceSendsNothing() async {
@@ -297,7 +307,7 @@ final class GivingFlowModelTests: XCTestCase {
         await m.load()
         await m.cancel()
         XCTAssertTrue(m.recurring.isEnding, "billing already shows the gift ending")
-        guard case .failed = m.phase else { return XCTFail() }
+        guard case .failed = m.phase else { return XCTFail("expected the failed phase") }
     }
 
     func testCancelCancellationKeepsStateAndDoubleTapSendsOnce() async {
@@ -350,8 +360,21 @@ final class GivingFlowModelTests: XCTestCase {
         XCTAssertNil(m.handoff)
         XCTAssertFalse(m.isConfirming)
         XCTAssertEqual(m.recurring.subscriptionID, "sub")
+        XCTAssertEqual(m.giftsSaved, 1)
         XCTAssertEqual(m.notice, "Your gift is set up.")
         XCTAssertEqual(m.selection.dailyDollars, 1)
+    }
+
+    func testACancelledPollDoesNotClaimNoGiftWasFound() async {
+        let service = GivingDouble()
+        let m = model(service, attempts: 3)
+        await m.load()
+        await m.startGift()
+        let poll = Task { await m.handoffFinished() }
+        poll.cancel()
+        await poll.value
+        XCTAssertNil(m.notice)
+        XCTAssertFalse(m.isConfirming)
     }
 
     func testStartGiftThatNeverAppearsStopsPollingAndSaysSo() async {
@@ -425,7 +448,7 @@ final class GivingFlowModelTests: XCTestCase {
             await m.startGift()
             guard case .failed = m.phase else { XCTFail("\(error)"); continue }
             XCTAssertNil(m.handoff)
-            XCTAssertFalse(m.isBusy == true && m.phase == .working)
+            XCTAssertFalse(m.isBusy)
         }
     }
 
@@ -486,7 +509,7 @@ final class GivingFlowModelTests: XCTestCase {
         await a.load()
         await a.updatePayment()
         XCTAssertEqual(none.beginPaymentScript.count, 0)
-        guard case .failed = a.phase else { return XCTFail() }
+        guard case .failed = a.phase else { return XCTFail("expected the failed phase") }
 
         for error in [AccountError.conflict, .forbidden, .rateLimited, .unavailable, .paymentsUnavailable] {
             let service = GivingDouble()

@@ -1,27 +1,27 @@
 import Foundation
 
-// Account & settings (PRD §6.11, §6.12) — the iOS counterpart of Android Phase 7, built here as
-// the automatable slice of Phase H (release readiness): the App Store mandates an in-app
-// account-deletion flow, which iOS did not yet have. Pure value types so the preferences block,
-// its optimistic version, and the delete-account confirm gate are unit-testable without I/O.
-
-// MARK: - Profile summary (read-only header)
+// Account & settings (PRD §6.11, §6.12). The App Store mandates an in-app account-deletion flow.
+// Pure value types so the preferences block, its optimistic version, and the delete-account
+// confirm gate are unit-testable without I/O.
 
 /// The account header settings shows. `accountRole` is fixed at creation and immutable (D-1), so
-/// it is display-only; `zip` drives the streak's local-day rollover (§10).
+/// it is display-only; the saved time zone controls the streak’s local-day rollover (§10).
 public struct AccountProfileSummary: Sendable, Equatable {
     public let email: String
     public let accountRole: String
     public let zip: String?
     public let city: String?
     public let phone: String?
+    public let timezone: String?
+    public let timezoneOverride: String?
 
-    public init(email: String, accountRole: String, zip: String?, city: String?, phone: String?) {
+    public init(email: String, accountRole: String, zip: String?, city: String?, phone: String?, timezone: String? = nil, timezoneOverride: String? = nil) {
         self.email = email
         self.accountRole = accountRole
         self.zip = zip
         self.city = city
         self.phone = phone
+        self.timezone = timezone; self.timezoneOverride = timezoneOverride
     }
 
     public var zipLabel: String {
@@ -29,8 +29,6 @@ public struct AccountProfileSummary: Sendable, Equatable {
         return zip
     }
 }
-
-// MARK: - Preferences (§6.11)
 
 /// The donor's preference block, carrying the optimistic-concurrency `version` it was read at so a
 /// stale overwrite is rejected server-side. Payment-failure email is deliberately absent — it is
@@ -91,27 +89,55 @@ public struct AccountPreferences: Sendable, Equatable {
         public let value: Bool
     }
 
-    /// The push category toggles (§6.11), in display order. Payment-failure email is absent
-    /// (non-toggleable server-side).
-    public var pushToggles: [Toggle] {
-        [
-            Toggle(key: "push_referral_converted", label: "Someone joined through you", value: pushReferralConverted),
-            Toggle(key: "push_streak_at_risk", label: "Streak at risk", value: pushStreakAtRisk),
-            Toggle(key: "push_streak_milestone", label: "Streak milestone", value: pushStreakMilestone),
-            Toggle(key: "push_streak_lapsed", label: "Streak lapsed", value: pushStreakLapsed),
-            Toggle(key: "push_badge_earned", label: "Badge earned", value: pushBadgeEarned),
-            Toggle(key: "push_event_nearby", label: "Events nearby", value: pushEventNearby),
-            Toggle(key: "push_event_reminder", label: "Event reminders", value: pushEventReminder),
-            Toggle(key: "push_event_promoted", label: "Event promoted", value: pushEventPromoted),
-            Toggle(key: "push_gift_processed", label: "Gift processed", value: pushGiftProcessed),
-        ]
+    private struct Field: Sendable {
+        let key: String
+        /// Nil for a flag the settings screen does not list as a push or email row.
+        let label: String?
+        let path: WritableKeyPath<AccountPreferences, Bool> & Sendable
+        init(_ key: String, _ label: String?, _ path: WritableKeyPath<AccountPreferences, Bool> & Sendable) {
+            self.key = key; self.label = label; self.path = path
+        }
     }
 
-    public var emailToggles: [Toggle] {
-        [
-            Toggle(key: "referral_emails", label: "Referral emails", value: referralEmails),
-            Toggle(key: "marketing_emails", label: "Marketing emails", value: marketingEmails),
-        ]
+    private static let pushFields: [Field] = [
+        Field("push_referral_converted", "Someone joined through you", \.pushReferralConverted),
+        Field("push_streak_at_risk", "Streak at risk", \.pushStreakAtRisk),
+        Field("push_streak_milestone", "Streak milestone", \.pushStreakMilestone),
+        Field("push_streak_lapsed", "Streak lapsed", \.pushStreakLapsed),
+        Field("push_badge_earned", "Badge earned", \.pushBadgeEarned),
+        Field("push_event_nearby", "Events nearby", \.pushEventNearby),
+        Field("push_event_reminder", "Event reminders", \.pushEventReminder),
+        Field("push_event_promoted", "Event promoted", \.pushEventPromoted),
+        Field("push_gift_processed", "Gift processed", \.pushGiftProcessed),
+    ]
+
+    private static let emailFields: [Field] = [
+        Field("referral_emails", "Referral emails", \.referralEmails),
+        Field("marketing_emails", "Marketing emails", \.marketingEmails),
+    ]
+
+    /// Keys for the privacy and volunteering flags the settings screen shows outside the push and email rows.
+    public static let rankingsOptedOutKey = "rankings_opted_out"
+    public static let networkVisibleKey = "network_visible"
+    public static let volunteerKey = "volunteer"
+
+    /// Toggles flipped by key that the settings screen does not list as push or email rows.
+    private static let otherFields: [Field] = [
+        Field(rankingsOptedOutKey, nil, \.rankingsOptedOut),
+        Field(networkVisibleKey, nil, \.networkVisible),
+        Field(volunteerKey, nil, \.volunteer),
+    ]
+
+    /// The push category toggles (§6.11), in display order. Payment-failure email is absent
+    /// (non-toggleable server-side).
+    public var pushToggles: [Toggle] { Self.toggles(Self.pushFields, of: self) }
+
+    public var emailToggles: [Toggle] { Self.toggles(Self.emailFields, of: self) }
+
+    private static func toggles(_ fields: [Field], of preferences: AccountPreferences) -> [Toggle] {
+        fields.compactMap { field in
+            field.label.map { Toggle(key: field.key, label: $0, value: preferences[keyPath: field.path]) }
+        }
     }
 
     /// Inverted for display: "Show my ranking" = NOT opted out.
@@ -157,29 +183,12 @@ public struct AccountPreferences: Sendable, Equatable {
 
     /// A copy with one toggle flipped by key; an unknown key returns self unchanged.
     public func with(_ key: String, _ value: Bool) -> AccountPreferences {
+        guard let field = (Self.pushFields + Self.emailFields + Self.otherFields).first(where: { $0.key == key }) else { return self }
         var copy = self
-        switch key {
-        case "referral_emails": copy.referralEmails = value
-        case "marketing_emails": copy.marketingEmails = value
-        case "push_referral_converted": copy.pushReferralConverted = value
-        case "push_streak_at_risk": copy.pushStreakAtRisk = value
-        case "push_streak_milestone": copy.pushStreakMilestone = value
-        case "push_streak_lapsed": copy.pushStreakLapsed = value
-        case "push_badge_earned": copy.pushBadgeEarned = value
-        case "push_event_nearby": copy.pushEventNearby = value
-        case "push_event_reminder": copy.pushEventReminder = value
-        case "push_event_promoted": copy.pushEventPromoted = value
-        case "push_gift_processed": copy.pushGiftProcessed = value
-        case "rankings_opted_out": copy.rankingsOptedOut = value
-        case "network_visible": copy.networkVisible = value
-        case "volunteer": copy.volunteer = value
-        default: break
-        }
+        copy[keyPath: field.path] = value
         return copy
     }
 }
-
-// MARK: - Delete account (store-mandated, §6.12)
 
 /// The delete-account confirm gate. Deletion is irreversible (backend removes personal data, keeps
 /// legally-required gift records), so the donor must type the exact word before the action enables.

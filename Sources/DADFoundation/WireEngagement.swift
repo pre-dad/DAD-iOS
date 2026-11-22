@@ -29,8 +29,6 @@ public struct WireEngagement: EngagementService {
 
     init(product: ProductClient) { self.product = product }
 
-    // MARK: - snapshot
-
     public func snapshot() async throws -> EngagementSnapshot {
         async let dashboard = Self.capture { try await WireDashboard(product: product).dashboard() }
         async let badges = Self.capture { try await self.badges() }
@@ -60,7 +58,7 @@ public struct WireEngagement: EngagementService {
                 }
             case .preparing:
                 // Figures are not computed yet, but the donor's rankings choice is still theirs to make.
-                if let settings = try? await WireAccountSettings(product: product).load() {
+                if let settings = try await optionalRead({ try await WireAccountSettings(product: product).load() }) {
                     ranking = RankingStanding(nationalPercentile: nil, city: nil, cityRank: nil,
                                               rankingsOptedOut: settings.preferences.rankingsOptedOut)
                 }
@@ -82,8 +80,6 @@ public struct WireEngagement: EngagementService {
         return EngagementSnapshot(impact: impact, badges: badgeCollection, ranking: ranking, network: networkSummary,
                                   referral: referral, needsPublicName: needsName)
     }
-
-    // MARK: - sections
 
     func badges() async throws -> BadgeCollection {
         try await product.call { client in
@@ -174,8 +170,6 @@ public struct WireEngagement: EngagementService {
         }
     }
 
-    // MARK: - commands
-
     public func setRankingOptIn(_ optIn: Bool) async throws -> RankingStanding {
         let settings = WireAccountSettings(product: product)
         var attempt = 0
@@ -192,7 +186,7 @@ public struct WireEngagement: EngagementService {
         }
         guard optIn else { return RankingStanding(nationalPercentile: nil, city: nil, cityRank: nil, rankingsOptedOut: true) }
         // Back in the rankings: the server decides the position. If that read fails the choice still stands.
-        if case .ready(let dashboard)? = try? await WireDashboard(product: product).dashboard() {
+        if case .ready(let dashboard)? = try await optionalRead({ try await WireDashboard(product: product).dashboard() }) {
             switch dashboard.rank {
             case .ranked(let rank): return RankingStanding(nationalPercentile: rank.topPercent, city: rank.city, cityRank: rank.cityRank)
             case .notRankedYet, .optedOut: break

@@ -62,7 +62,7 @@ public struct LinkRouter: Sendable {
         policy = try decoder.decode(LinkPolicy.self, from: Data(contentsOf: file))
     }
     public func route(_ url: URL) -> LinkIntent? {
-        guard url.absoluteString.count <= 4096, url.scheme == origin.scheme, url.host == origin.host, (url.port ?? 443) == (origin.port ?? 443),
+        guard url.absoluteString.count <= 4096, url.scheme == origin.scheme, url.host?.lowercased() == origin.host?.lowercased(), (url.port ?? 443) == (origin.port ?? 443),
               url.user == nil, url.password == nil,
               let parts = URLComponents(url: url, resolvingAgainstBaseURL: false),
               !parts.percentEncodedPath.lowercased().contains("%2f"),

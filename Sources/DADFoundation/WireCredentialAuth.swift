@@ -28,8 +28,6 @@ public struct WireCredentialAuth: SignupService, SignInLinkService, PasswordSign
         Client(serverURL: origin, transport: transport, middlewares: [NativeHeaders(access: { nil })])
     }
 
-    // MARK: Signup
-
     public func requestSignup(_ form: SignupForm) async throws {
         let body = Operations.postDonorSignup.Input.Body.jsonPayload(name: form.name, email: form.email, zip: form.zip, city: form.city)
         switch try await client.postDonorSignup(.init(body: .json(body))) {
@@ -43,8 +41,6 @@ public struct WireCredentialAuth: SignupService, SignInLinkService, PasswordSign
         }
     }
 
-    // MARK: Sign-in link
-
     public func requestSignInLink(email: String) async throws {
         switch try await client.login(.init(body: .json(.init(email: email)))) {
         case .accepted: return
@@ -53,8 +49,6 @@ public struct WireCredentialAuth: SignupService, SignInLinkService, PasswordSign
         default: throw AccountError.unavailable
         }
     }
-
-    // MARK: Password sign-in
 
     public func signIn(email: String, password: String) async throws -> Credentials {
         let body = Operations.postDonorPasswordSignIn.Input.Body.jsonPayload(
@@ -70,8 +64,6 @@ public struct WireCredentialAuth: SignupService, SignInLinkService, PasswordSign
         }
     }
 
-    // MARK: Apple / Google
-
     public func signIn(provider: OIDCProvider, idToken: String, nonce: String) async throws -> Credentials {
         guard !idToken.isEmpty, idToken.utf8.count <= 8192, (1...256).contains(nonce.count) else { throw AccountError.invalidInput }
         let path = Operations.oidcSignIn.Input.Path(provider: provider == .apple ? .apple : .google)
@@ -86,8 +78,6 @@ public struct WireCredentialAuth: SignupService, SignInLinkService, PasswordSign
         default: throw AccountError.unavailable
         }
     }
-
-    // MARK: Passkey
 
     public func begin() async throws -> PasskeyChallenge {
         switch try await client.beginDonorPasskeySignIn(.init()) {

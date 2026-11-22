@@ -69,6 +69,9 @@ public final class GivingModel {
     public private(set) var handoff: HostedHandoff?
     /// A non-error line the screen shows (saved, cancelled, still confirming...).
     public private(set) var notice: String?
+    /// Bumped each time a gift is set up or its amount saved (never by a plain load), so the screen can
+    /// tie its success haptic to the action rather than to the gift merely appearing.
+    public private(set) var giftsSaved = 0
     /// The first read completed, so the screen can tell "loading" from "loaded, then a command failed".
     public private(set) var hasLoaded = false
     /// After a hosted page closes the model polls until the server reflects the outcome.
@@ -151,6 +154,7 @@ public final class GivingModel {
             await fail(error, rereadOnConflict: true)
             return
         }
+        giftsSaved += 1
         await readSupporting()
         notice = "Saved. Your next renewal will be \(formatUSDMinor(currentAmountMinor ?? selection.monthlyMinor))."
         phase = .idle
@@ -219,10 +223,10 @@ public final class GivingModel {
         }
         syncSelection()
         hasLoaded = true
+        if settled, finished.purpose == .startGift { giftsSaved += 1 }
+        guard !Task.isCancelled else { return }
         notice = Self.outcome(finished.purpose, settled: settled, recurring: recurring, payment: payment)
     }
-
-    // MARK: - private
 
     private func begin(_ purpose: HostedHandoff.Purpose, _ open: () async throws -> PaymentPath) async {
         phase = .working
@@ -233,7 +237,7 @@ public final class GivingModel {
                 handoff = HostedHandoff(url: url, purpose: purpose)
             case .alreadyFinished(let state):
                 payment = state
-                notice = Self.outcome(.updatePayment, settled: true, recurring: recurring, payment: state)
+                notice = Self.outcome(purpose, settled: true, recurring: recurring, payment: state)
             case .applePay:
                 phase = .failed("Apple Pay isn’t available in this build yet.")
                 return
@@ -243,8 +247,8 @@ public final class GivingModel {
             if purpose == .startGift, case AccountError.conflict = error {
                 // A gift or an open checkout already exists (or the key was used for another amount): pull
                 // the server's truth in and say so.
-                await fail(error, rereadOnConflict: true)
-                phase = .failed("You already have a monthly gift or a checkout in progress. We’ve refreshed it; please review.")
+                await fail(error, rereadOnConflict: true,
+                           message: "You already have a monthly gift or a checkout in progress. We’ve refreshed it; please review.")
             } else if purpose == .startGift, case AccountError.paymentsUnavailable = error {
                 phase = .failed("Giving isn’t available right now. Please try again later.")
             } else {
@@ -282,8 +286,8 @@ public final class GivingModel {
         if let minor = currentAmountMinor, let amount = GiftAmount(monthlyMinor: minor) { selection = amount }
     }
 
-    private func fail(_ error: Error, rereadOnConflict: Bool = false) async {
-        if error.isCancellation { phase = .idle; return }   // abandoned, not failed: prior state stands
+    private func fail(_ error: Error, rereadOnConflict: Bool = false, message: String? = nil) async {
+        if error.isCancellation { phase = .idle; return }
         if case AccountError.signedOut = error { signedOut = true }
         if rereadOnConflict, case AccountError.conflict = error {
             // Billing moved under the screen: pull the new truth in so the donor reviews current figures.
@@ -291,7 +295,7 @@ public final class GivingModel {
             await readSupporting()
             syncSelection()
         }
-        phase = .failed(error.userMessage)
+        phase = .failed(message ?? error.userMessage)
     }
 
     private static func outcome(_ purpose: HostedHandoff.Purpose, settled: Bool, recurring: RecurringState, payment: PaymentMethodState?) -> String {

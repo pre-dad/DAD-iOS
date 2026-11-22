@@ -11,7 +11,9 @@ test("pinned contract verifies offline and tampering with either payload or mani
   try {
     await cp(new URL("contracts", source), resolve(root, "contracts"), { recursive: true });
     await cp(new URL("foundation.lock.json", source), resolve(root, "foundation.lock.json"));
-    assert.equal((await verifyFoundation(root)).version, "2.12.0");
+    const pinned = JSON.parse(await readFile(new URL("foundation.lock.json", source), "utf8")).version;
+    assert.match(pinned, /^\d+\.\d+\.\d+$/);
+    assert.equal((await verifyFoundation(root)).version, pinned);
     const path = resolve(root, "contracts/foundation/tokens.json");
     const original = await readFile(path);
     await writeFile(path, '{}\n');

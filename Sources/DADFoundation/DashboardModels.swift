@@ -5,8 +5,6 @@ import Foundation
 // types and models; the network sits behind `DashboardService`. Money is integer USD minor units
 // (int64 on the wire) formatted only by `formatUSDMinor`. Nothing here logs.
 
-// MARK: - Dashboard
-
 /// The 30-day streak card ladder (S-2/S-3). `bar` has one segment per day of the current window.
 public struct StreakLadder: Sendable, Equatable {
     public let days: Int
@@ -25,6 +23,18 @@ public struct StreakLadder: Sendable, Equatable {
     }
 }
 
+/// The celebration line for a streak milestone (S-3), worded as on Android: the first milestones have
+/// their own lines, and every later one counts its days.
+public func milestoneLine(days: Int) -> String {
+    switch days {
+    case 7: "7 days. A full week of aid, on the record."
+    case 30: "30 days. That’s a month of aid, on the record."
+    case 100: "100 days. Triple digits, on the record."
+    case 365: "365 days. A full year of aid, on the record."
+    default: "\(days) days. Every one on the record."
+    }
+}
+
 public struct StreakCard: Sendable, Equatable {
     public let current: Int
     /// A renewal failed and the donor is inside the 7-day grace period (S-1).
@@ -37,7 +47,7 @@ public struct StreakCard: Sendable, Equatable {
     public var headline: String { "\(current)-day streak" }
 }
 
-/// The donor's own standing (S-4). `nationalPercentile` is the server's *top* bucket: 2 means
+/// The donor's own standing (S-4). `topPercent` is the server's *top* bucket: 2 means
 /// "Top 2%" (the PRD example), the opposite sense of a conventional percentile.
 public struct DashboardRank: Sendable, Equatable {
     public let topPercent: Int
@@ -46,11 +56,8 @@ public struct DashboardRank: Sendable, Equatable {
     public init(topPercent: Int, city: String?, cityRank: Int?) {
         self.topPercent = topPercent; self.city = city; self.cityRank = cityRank
     }
-    public var nationalLabel: String { "Top \(max(1, topPercent))% nationally" }
-    public var cityLabel: String? {
-        guard let city, !city.isEmpty, let rank = cityRank else { return nil }
-        return "#\(rank) in \(city)"
-    }
+    public var nationalLabel: String { RankingLabel.national(topPercent) }
+    public var cityLabel: String? { RankingLabel.city(city, rank: cityRank) }
 }
 
 /// What the rank line shows. Opted out is the explicit server flag, distinct from "opted in but not
@@ -93,8 +100,6 @@ public enum DashboardState: Sendable, Equatable {
     case ready(DonorDashboard)
 }
 
-// MARK: - Today's initiative
-
 public struct InitiativeMetric: Sendable, Equatable, Identifiable {
     public enum Unit: String, Sendable, Equatable { case usdCents = "USD_CENTS", people = "PEOPLE", initiatives = "INITIATIVES", partners = "PARTNERS" }
     public let label: String
@@ -135,8 +140,6 @@ public struct TodayInitiative: Sendable, Equatable {
     /// A-5: display attribution, not designated giving. Counsel owns the final wording.
     public static let attributionNote = "This shows where today’s rotation points. All gifts are unrestricted."
 }
-
-// MARK: - Gifts
 
 public struct GiftEntry: Sendable, Equatable, Identifiable {
     public enum Frequency: String, Sendable, Equatable { case monthly = "MONTHLY", oneTime = "ONE_TIME" }
@@ -199,8 +202,6 @@ public struct AnnualGivingSummary: Sendable, Equatable {
     public var netLabel: String { formatUSDMinor(netMinor) }
 }
 
-// MARK: - Service seam
-
 /// The donor-home read seam. `todayInitiative` answers nil for a 404 (nothing in rotation today).
 public protocol DashboardService: Sendable {
     func dashboard() async throws -> DashboardState
@@ -209,8 +210,6 @@ public protocol DashboardService: Sendable {
     func receipt(giftID: String) async throws -> GiftReceipt
     func annualSummary(year: Int) async throws -> AnnualGivingSummary
 }
-
-// MARK: - Dashboard model
 
 /// Drives the donor home cards. A refresh that fails or is cancelled keeps the cards already on
 /// screen (a notice explains a failed one); only a first load with nothing to show becomes `.failed`.
@@ -276,8 +275,6 @@ public final class DashboardModel {
         do { return .success(try await work()) } catch { return .failure(error) }
     }
 }
-
-// MARK: - Gift history model
 
 /// Paginated gift history (50 rows a page from the server). Memory is bounded: past `maxRows` the model
 /// stops fetching and says so. A reload or `cancel()` invalidates any page in flight.

@@ -60,7 +60,7 @@ final class KeychainStoreTests: XCTestCase {
                                     kSecAttrAccount as String: "donor-session", kSecAttrSynchronizable as String: false]
         let status = SecItemUpdate(query as CFDictionary, [kSecValueData as String: Data("not json".utf8)] as CFDictionary)
         XCTAssertEqual(status, errSecSuccess)
-        XCTAssertThrowsError(try store.load()) { XCTAssertTrue($0 is DecodingError, "\($0)") }
+        XCTAssertThrowsError(try store.load()) { XCTAssertEqual($0 as? AccountError, .secureStorage(errSecDecode), "\($0)") }
     }
 
     func testCredentialsNeverPrintTheirSecrets() {

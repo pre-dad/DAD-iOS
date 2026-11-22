@@ -13,10 +13,11 @@ public struct WireAccountManagement: AccountManagementService {
 
     init(product: ProductClient) { self.product = product }
 
-    public func saveProfile(zip: String, city: String, phone: String) async throws -> AccountProfileSummary {
-        try await product.perform { client in
-            switch try await client.saveProfile(.init(body: .json(.init(zip: zip, city: city, phone: phone)))) {
-            case .ok(let response): return try WireAccountSettings.snapshot(response.body.json).profile
+    public func saveProfile(zip: String, city: String, phone: String, timezoneOverride: String?) async throws -> AccountProfileSummary {
+        if let timezoneOverride, !StreakTimeZone.choices.contains(where: { $0.value == timezoneOverride }) { throw AccountError.invalidInput }
+        return try await product.call { client in
+            switch try await client.saveProfile(.init(body: .json(.init(zip: zip, city: city, phone: phone, timezone_override: timezoneOverride)))) {
+            case .ok(let response): return WireAccountSettings.snapshot(try response.body.json).profile
             case .unauthorized: throw AccountError.signedOut
             case .unprocessableContent: throw AccountError.invalidInput
             case .tooManyRequests: throw AccountError.rateLimited
@@ -26,7 +27,7 @@ public struct WireAccountManagement: AccountManagementService {
     }
 
     public func requestEmailChange(to email: String) async throws {
-        try await product.perform { client in
+        try await product.call { client in
             switch try await client.requestEmailChange(.init(body: .json(.init(email: email)))) {
             case .ok: return
             case .unauthorized: throw AccountError.signedOut
@@ -39,7 +40,7 @@ public struct WireAccountManagement: AccountManagementService {
     }
 
     public func sessions() async throws -> [DeviceSessionSummary] {
-        try await product.perform { client in
+        try await product.call { client in
             switch try await client.sessions(.init()) {
             case .ok(let response): return Self.sessions(try response.body.json)
             case .unauthorized: throw AccountError.signedOut
@@ -50,7 +51,7 @@ public struct WireAccountManagement: AccountManagementService {
     }
 
     public func revokeSession(id: String) async throws -> [DeviceSessionSummary] {
-        try await product.perform { client in
+        try await product.call { client in
             switch try await client.revokeSession(.init(path: .init(session_id: id))) {
             case .ok(let response): return Self.sessions(try response.body.json)
             case .unauthorized: throw AccountError.signedOut
@@ -63,7 +64,7 @@ public struct WireAccountManagement: AccountManagementService {
     }
 
     public func revokeOtherSessions() async throws -> [DeviceSessionSummary] {
-        try await product.perform { client in
+        try await product.call { client in
             switch try await client.revokeOtherSessions(.init()) {
             case .ok(let response): return Self.sessions(try response.body.json)
             case .unauthorized: throw AccountError.signedOut
@@ -77,7 +78,7 @@ public struct WireAccountManagement: AccountManagementService {
     /// the donor signed in to retry rather than believing the other devices were signed out.
     public func signOutEverywhere() async throws {
         do {
-            try await product.perform { client in
+            try await product.call { client in
                 switch try await client.logoutAll(.init()) {
                 case .ok: return
                 case .unauthorized: throw AccountError.signedOut
@@ -90,7 +91,7 @@ public struct WireAccountManagement: AccountManagementService {
     }
 
     public func employer() async throws -> EmployerTeam {
-        try await product.perform { client in
+        try await product.call { client in
             switch try await client.employeeTeam(.init()) {
             case .ok(let response):
                 let body = try response.body.json
@@ -99,7 +100,7 @@ public struct WireAccountManagement: AccountManagementService {
                     teamName: body.team_name.flatMap { $0.isEmpty ? nil : $0 },
                     leaderboard: body.leaderboard.map {
                         TeamStanding(id: $0.team_id, name: $0.name, activeGivers: $0.active_givers, annualizedMinor: $0.annualized_minor,
-                                     avgStreakDays: $0.avg_streak_days, volunteerMinutes: $0.volunteer_minutes)
+                                     avgStreakDays: $0.avg_streak_days, volunteerMinutes: $0.volunteer_minutes, metricsVerified: $0.metrics_verified)
                     })
             case .unauthorized: throw AccountError.signedOut
             case .tooManyRequests: throw AccountError.rateLimited
@@ -109,7 +110,7 @@ public struct WireAccountManagement: AccountManagementService {
     }
 
     public func enroll(companyCode: String) async throws -> String {
-        try await product.perform { client in
+        try await product.call { client in
             switch try await client.employeeEnroll(.init(body: .json(.init(company_code: companyCode)))) {
             case .ok(let response): return try response.body.json.organization
             case .unauthorized: throw AccountError.signedOut
@@ -122,7 +123,7 @@ public struct WireAccountManagement: AccountManagementService {
     }
 
     public func joinTeam(name: String) async throws {
-        try await product.perform { client in
+        try await product.call { client in
             switch try await client.employeeJoinTeam(.init(body: .json(.init(name: name)))) {
             case .ok: return
             case .unauthorized: throw AccountError.signedOut

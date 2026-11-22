@@ -78,20 +78,21 @@ public final class PhoneSignInModel {
         self.establish = establish
     }
 
-    /// Back-compat shape: the model verifies first, then hands the finished credentials over.
-    /// Prefer `init(service:establish:)`, which keeps the network await inside the session.
-    public init(service: any SignInService, onEstablish: @escaping @Sendable (Credentials) async -> Void) {
-        self.service = service
-        self.establish = { produce in
-            let credentials = try await produce()
-            await onEstablish(credentials)
-            return credentials
-        }
+    /// The typed number as E.164 (US numbers may be typed with or without +1, spaces, dashes or
+    /// parentheses), or nil when it cannot be sent: not 8–15 digits after a leading +.
+    public var normalizedPhone: String? {
+        guard let e164 = ProfileRules.e164(phone), !e164.isEmpty,
+              e164.range(of: "^\\+[1-9][0-9]{7,14}$", options: .regularExpression) != nil else { return nil }
+        return e164
     }
 
-    /// E.164-ish: a leading + and 8–15 digits. Keeps obviously-bad input off the wire.
-    public var canRequestCode: Bool {
-        phone.range(of: "^\\+[1-9][0-9]{7,14}$", options: .regularExpression) != nil
+    public var canRequestCode: Bool { normalizedPhone != nil }
+
+    /// Shown under the phone field once something is typed that cannot be sent, so a disabled
+    /// button never goes unexplained.
+    public var phoneFormatHint: String? {
+        phone.trimmingCharacters(in: .whitespaces).isEmpty || canRequestCode
+            ? nil : "Enter a US number like (555) 123-4567, or include your country code, like +44 20 7946 0958."
     }
 
     /// The server issues 6-digit codes; enable verify only when the field is complete.
@@ -100,16 +101,18 @@ public final class PhoneSignInModel {
     }
 
     public func requestCode() async {
-        guard canRequestCode else { return }
+        guard let number = normalizedPhone else { return }
         if case .requestingCode = phase { return }
         phase = .requestingCode
         do {
-            let handle = try await service.requestPhoneCode(phone: phone)
+            let handle = try await service.requestPhoneCode(phone: number)
             activeHandle = handle
             phase = .enterCode(handle: handle)
+        } catch where error.isCancellation {
+            phase = .enterPhone
         } catch {
             activeHandle = nil
-            phase = .failed(Self.message(for: error))
+            phase = .failed(Self.message(for: error, verifying: false))
         }
     }
 
@@ -121,23 +124,22 @@ public final class PhoneSignInModel {
             let service = self.service
             let credentials = try await establish { try await service.verifyPhone(handle: handle, code: code) }
             phase = .signedIn(credentials)
+        } catch where error.isCancellation {
+            phase = .enterCode(handle: handle)
         } catch {
             // Keep the handle so the user can re-enter the code without re-requesting.
-            phase = .failed(Self.message(for: error))
+            phase = .failed(Self.message(for: error, verifying: true))
         }
     }
 
-    /// Return to the code screen after a recoverable failure, preserving the handle.
-    public func retryCodeEntry() {
-        guard let handle = activeHandle else { phase = .enterPhone; return }
-        phase = .enterCode(handle: handle)
-    }
-
-    private static func message(for error: Error) -> String {
+    /// The same server error means different things on the two calls: a 401 or 400 on verify is a
+    /// wrong code, but on request it is not about the code at all.
+    private static func message(for error: Error, verifying: Bool) -> String {
         switch error {
-        case AccountError.signedOut: "That code didn’t match. Check it and try again."
-        case AccountError.unavailable: "We couldn’t reach DAD. Please try again in a moment."
+        case AccountError.signedOut where verifying, AccountError.invalidInput where verifying:
+            "That code didn’t match. Check it and try again."
         case AccountError.invalidInput: "That phone number doesn’t look right. Check it and try again."
+        case AccountError.unavailable: "We couldn’t reach DAD. Please try again in a moment."
         case AccountError.rateLimited: "Too many attempts. Please wait a moment and try again."
         default: "Something went wrong. Please try again."
         }

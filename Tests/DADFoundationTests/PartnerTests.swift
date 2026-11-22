@@ -75,6 +75,9 @@ final class PartnerPeopleTests: XCTestCase {
         XCTAssertNil(suppressed.matchedLabel)
         XCTAssertNotNil(suppressed.suppressionNotice)
         XCTAssertTrue(suppressed.suppressionNotice!.contains("Fewer than 5"))
+        XCTAssertEqual([suppressed.enrolled, suppressed.givenMinor, suppressed.matchedMinor, suppressed.avgStreakDays,
+                        suppressed.volunteerMinutes, suppressed.teams], [0, 0, 0, 0, 0, 0])
+        XCTAssertFalse(suppressed.streakVerified)
     }
 
     func testUnsuppressedGroupShowsFigures() {
@@ -112,6 +115,7 @@ final class PartnerModelTests: XCTestCase {
         var removeError: Error?
         var actionError: Error?
         var retainedError: Error?
+        var signOutError: Error?
         private(set) var invited: [(String, String, PartnerRole)] = []
         private(set) var profiles: [(String, String)] = []
         private(set) var workforce: [Int] = []
@@ -167,7 +171,10 @@ final class PartnerModelTests: XCTestCase {
             if let retainedError { throw retainedError }
             return Data("%PDF".utf8)
         }
-        func signOut() async throws { signedOut = true }
+        func signOut() async throws {
+            if let signOutError { throw signOutError }
+            signedOut = true
+        }
         func registerPushDevice(token: String, environment: PushEnvironment) async throws { pushRegistered = true }
         func unregisterPushDevice() async throws { pushUnregistered = true }
     }
@@ -365,6 +372,16 @@ final class PartnerModelTests: XCTestCase {
         XCTAssertTrue(svc.invited.isEmpty)
     }
 
+    func testFailedLocalSignOutDoesNotClaimTheSessionWasForgotten() async {
+        let service = FakeService()
+        service.signOutError = AccountError.secureStorage(-1)
+        let model = PartnerModel(service: service)
+        await model.load()
+        await model.signOut()
+        XCTAssertFalse(model.signedOut)
+        XCTAssertNotNil(model.actionError)
+    }
+
     func testLostSessionDuringAnActionEndsThePortal() async {
         let svc = FakeService()
         let model = PartnerModel(service: svc)
@@ -502,6 +519,20 @@ final class PartnerSignInModelTests: XCTestCase {
 }
 
 final class PartnerSessionTests: XCTestCase {
+    func testCorruptPartnerCredentialsAreForgottenWithoutBlockingAppStartup() async throws {
+        struct CorruptStore: CredentialStore {
+            let wiped: WipeBox
+            func load() throws -> Credentials? { throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "corrupt")) }
+            func save(_ credentials: Credentials) throws {}
+            func clear() throws { wiped.hit() }
+        }
+        let wiped = WipeBox()
+        let session = try PartnerSession(store: CorruptStore(wiped: wiped))
+        let signedIn = await session.isSignedIn
+        XCTAssertFalse(signedIn)
+        XCTAssertEqual(wiped.count, 1)
+    }
+
     func testSessionLastsTwelveHoursThenIsForgotten() async throws {
         let clock = Clock()
         let store = MemoryStore(nil)
@@ -540,7 +571,7 @@ final class WirePartnerTests: XCTestCase {
         let store = MemoryStore(nil)
         let session = try PartnerSession(store: store)
         try await session.install(token: "PB")
-        do { _ = try await WirePartner(origin: testOrigin, transport: transport, session: session).overview(); XCTFail() }
+        do { _ = try await WirePartner(origin: testOrigin, transport: transport, session: session).overview(); XCTFail("overview must throw") }
         catch { XCTAssertEqual(error as? AccountError, .signedOut) }
         XCTAssertNil(try store.load())
     }
@@ -665,5 +696,13 @@ final class PartnerReportSizeTests: XCTestCase {
         let retained = try await service.retainedReport(id: "report")
         XCTAssertEqual(report, Data(pdf.utf8))
         XCTAssertEqual(retained, report)
+    }
+}
+
+final class VolunteerTimeTests: XCTestCase {
+    func testLabelsMinutesBelowAnHourAndHoursToOneDecimal() {
+        let cases: [(Int64, String)] = [(0, "0 minutes"), (1, "1 minute"), (59, "59 minutes"), (60, "1 hour"), (90, "1.5 hours"),
+                                        (125, "2.1 hours"), (120, "2 hours")]
+        for (minutes, label) in cases { XCTAssertEqual(VolunteerTime.label(minutes: minutes), label, "\(minutes)") }
     }
 }

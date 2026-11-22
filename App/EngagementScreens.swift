@@ -16,13 +16,15 @@ private struct EngagementBackground: ViewModifier {
     }
 }
 
+private let qrContext = CIContext()
+
 /// A QR code drawn locally with CoreImage, scaled by `scale` so it stays sharp when shown with `.interpolation(.none)`.
 func qrCodeImage(_ text: String, scale: CGFloat) -> UIImage? {
     let filter = CIFilter.qrCodeGenerator()
     filter.message = Data(text.utf8)
     filter.correctionLevel = "M"
     guard let output = filter.outputImage?.transformed(by: CGAffineTransform(scaleX: scale, y: scale)),
-          let cgImage = CIContext().createCGImage(output, from: output.extent) else { return nil }
+          let cgImage = qrContext.createCGImage(output, from: output.extent) else { return nil }
     return UIImage(cgImage: cgImage)
 }
 
@@ -38,6 +40,8 @@ struct EngagementHome: View {
     var onSignedOut: () -> Void = {}
     @State private var showQR = false
     @Environment(AnalyticsController.self) private var analytics: AnalyticsController?
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var copied = false
     @State private var nameDraft = ""
     /// Toggled when an invite is shared/copied, driving the success haptic.
@@ -118,7 +122,10 @@ struct EngagementHome: View {
                 }
                 // A grid of SF Symbols. Earned/unearned differ by SHAPE + LABEL (not colour
                 // alone): earned shows a filled seal and "Earned"; unearned a lock and "Locked".
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12, alignment: .top)], alignment: .leading, spacing: 12) {
+                // Two 150-point columns still fit a phone at accessibility sizes, where they break words mid-letter.
+                LazyVGrid(columns: typeSize.isAccessibilitySize ? [GridItem(.flexible(), alignment: .top)]
+                              : [GridItem(.adaptive(minimum: 150), spacing: 12, alignment: .top)],
+                          alignment: .leading, spacing: 12) {
                     ForEach(collection.badges) { badge in
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 8) {
@@ -128,7 +135,9 @@ struct EngagementHome: View {
                                     .foregroundStyle(.secondary)
                             }
                             Text(badge.shownTitle).fontWeight(badge.earned ? .semibold : .regular)
-                            Text(badge.earned ? earnedLine(badge) : badge.rule).font(.caption).foregroundStyle(.secondary)
+                            if let detail = badge.earned ? earnedLine(badge) : badge.rule {
+                                Text(detail).font(.caption).foregroundStyle(.secondary)
+                            }
                             if badge.hasPerk {
                                 Text("Perk: \(badge.perk)").font(.caption).foregroundStyle(.secondary)
                                     .accessibilityIdentifier("badge-perk-\(badge.code)")
@@ -136,7 +145,8 @@ struct EngagementHome: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.dadSpace("3"))
-                        .background(Color.dad("card-quiet"), in: RoundedRectangle(cornerRadius: .dadRadius("field"), style: .continuous))
+                        .background(Color.dad(scheme == .dark ? "ink" : "card-quiet"),
+                                    in: RoundedRectangle(cornerRadius: .dadRadius("field"), style: .continuous))
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel(badge.accessibilitySummary)
                         .accessibilityIdentifier("badge-\(badge.code)")
@@ -149,8 +159,9 @@ struct EngagementHome: View {
         }
     }
 
-    private func earnedLine(_ badge: Badge) -> String {
-        badge.earnedAt.map { "Earned \($0.formatted(date: .abbreviated, time: .omitted))" } ?? "Earned"
+    /// The date an earned badge was earned; nil without one, since the tile already says "Earned".
+    private func earnedLine(_ badge: Badge) -> String? {
+        badge.earnedAt.map { "Earned \($0.formatted(date: .abbreviated, time: .omitted))" }
     }
 
     // MARK: rankings (K-1..K-3): opt-out hides the position entirely, never a name list
@@ -223,7 +234,8 @@ struct EngagementHome: View {
                 Label("This is what your invite shows", systemImage: "person.crop.circle.badge.plus")
                     .font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
                 Text("You invited them to DAD").font(.headline)
-                DADGiftFraming(monthly: "$30/month", daily: "$1 a day")
+                DADGiftFraming(monthly: "\(formatUSDMinor(GiftAmount.minimum.monthlyMinor))/month",
+                               daily: "\(formatUSDMinor(GiftAmount.minimum.dailyDollars * 100)) a day")
             }
         }.accessibilityElement(children: .contain).accessibilityIdentifier("invite-preview")
     }
@@ -271,6 +283,11 @@ struct EngagementHome: View {
                 }
             }
         }.accessibilityElement(children: .contain).accessibilityIdentifier("invite-section")
+            .task(id: copied) {
+                guard copied else { return }
+                try? await Task.sleep(for: .seconds(3))
+                copied = false
+            }
     }
 
     @ViewBuilder private func conversions(_ referral: ReferralInfo) -> some View {

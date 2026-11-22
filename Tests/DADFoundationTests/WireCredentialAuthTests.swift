@@ -131,7 +131,7 @@ final class WirePasswordSignInTests: XCTestCase {
 
     func testMalformedBodyIsAFailureNotASession() async {
         let transport = ScriptedTransport { _, _ in (.ok, "not json") }
-        do { _ = try await WireCredentialAuth(origin: testOrigin, transport: transport).signIn(email: "a@b.co", password: "x"); XCTFail() }
+        do { _ = try await WireCredentialAuth(origin: testOrigin, transport: transport).signIn(email: "a@b.co", password: "x"); XCTFail("signIn must throw") }
         catch { assertBodyRejected(error) }
     }
 
@@ -198,7 +198,7 @@ final class WireOIDCTests: XCTestCase {
     func testEmptyOrOversizeTokenNeverReachesTheWire() async {
         for token in ["", String(repeating: "a", count: 8193)] {
             let transport = ScriptedTransport { _, _ in (.ok, nativeSessionJSON) }
-            do { _ = try await WireCredentialAuth(origin: testOrigin, transport: transport).signIn(provider: .google, idToken: token, nonce: "n"); XCTFail() }
+            do { _ = try await WireCredentialAuth(origin: testOrigin, transport: transport).signIn(provider: .google, idToken: token, nonce: "n"); XCTFail("signIn must throw") }
             catch { XCTAssertEqual(error as? AccountError, .invalidInput) }
             XCTAssertTrue(transport.seen.isEmpty)
         }
@@ -207,7 +207,7 @@ final class WireOIDCTests: XCTestCase {
     func testEmptyOrOversizeNonceNeverReachesTheWire() async {
         for nonce in ["", String(repeating: "n", count: 257)] {
             let transport = ScriptedTransport { _, _ in (.ok, nativeSessionJSON) }
-            do { _ = try await WireCredentialAuth(origin: testOrigin, transport: transport).signIn(provider: .apple, idToken: "t", nonce: nonce); XCTFail() }
+            do { _ = try await WireCredentialAuth(origin: testOrigin, transport: transport).signIn(provider: .apple, idToken: "t", nonce: nonce); XCTFail("signIn must throw") }
             catch { XCTAssertEqual(error as? AccountError, .invalidInput) }
             XCTAssertTrue(transport.seen.isEmpty)
         }
@@ -215,7 +215,7 @@ final class WireOIDCTests: XCTestCase {
 
     func testBrowserShapedBodyIsNeverASession() async {
         let transport = ScriptedTransport { _, _ in (.ok, #"{"signed_in":true}"#) }
-        do { _ = try await WireCredentialAuth(origin: testOrigin, transport: transport).signIn(provider: .apple, idToken: "t", nonce: "n"); XCTFail() }
+        do { _ = try await WireCredentialAuth(origin: testOrigin, transport: transport).signIn(provider: .apple, idToken: "t", nonce: "n"); XCTFail("signIn must throw") }
         catch { XCTAssertEqual(error as? AccountError, .invalidResponse) }
     }
 }
@@ -294,7 +294,7 @@ final class WirePasskeyTests: XCTestCase {
             catch { XCTAssertEqual(error as? AccountError, expected, "\(status)") }
         }
         let browser = ScriptedTransport { _, _ in (.ok, #"{"signed_in":true}"#) }
-        do { _ = try await WireCredentialAuth(origin: testOrigin, transport: browser).finish(challenge, assertion: assertion); XCTFail() }
+        do { _ = try await WireCredentialAuth(origin: testOrigin, transport: browser).finish(challenge, assertion: assertion); XCTFail("finish must throw") }
         catch { XCTAssertEqual(error as? AccountError, .invalidResponse) }
     }
 
@@ -340,7 +340,7 @@ final class WirePasswordSettingsTests: XCTestCase {
 
     func testUnknownProblemCodeOn422IsInvalidInput() async throws {
         let (settings, _, store) = try make(ScriptedTransport { _, _ in (.unprocessableContent, #"{"detail":"x","code":"SOMETHING_NEW"}"#) })
-        do { try await settings.setPassword(current: "a", new: "a brand new passphrase"); XCTFail() }
+        do { try await settings.setPassword(current: "a", new: "a brand new passphrase"); XCTFail("setPassword must throw") }
         catch { XCTAssertEqual(error as? AccountError, .invalidInput) }
         XCTAssertNotNil(try store.load())
     }
@@ -348,7 +348,7 @@ final class WirePasswordSettingsTests: XCTestCase {
     private func assertWrongPassword(_ status: HTTPResponse.Status, _ json: String) async throws {
         let transport = ScriptedTransport { _, _ in (status, json) }
         let (settings, session, store) = try make(transport)
-        do { try await settings.setPassword(current: "typo", new: "a brand new passphrase"); XCTFail() }
+        do { try await settings.setPassword(current: "typo", new: "a brand new passphrase"); XCTFail("setPassword must throw") }
         catch { XCTAssertEqual(error as? AccountError, .passwordIncorrect) }
         XCTAssertEqual(transport.seen.count, 1, "no refresh and no retry for a rejected credential")
         XCTAssertNotNil(try store.load(), "a typo must not wipe the session")
@@ -373,7 +373,7 @@ final class WirePasswordSettingsTests: XCTestCase {
     func testSecondGenericUnauthorizedEndsTheSession() async throws {
         let transport = ScriptedTransport { seen, _ in seen.request.path == "/donor/refresh" ? (.ok, freshSessionJSON) : (.unauthorized, "{}") }
         let (settings, _, store) = try make(transport)
-        do { try await settings.setPassword(current: nil, new: "a brand new passphrase"); XCTFail() }
+        do { try await settings.setPassword(current: nil, new: "a brand new passphrase"); XCTFail("setPassword must throw") }
         catch { XCTAssertEqual(error as? AccountError, .signedOut) }
         XCTAssertNil(try store.load())
     }
@@ -417,7 +417,7 @@ final class WirePasswordSettingsTests: XCTestCase {
 
     func testPasskeyDeleteNotFoundMapsToInvalidInput() async throws {
         let (service, _, _) = try make(ScriptedTransport { _, _ in (.notFound, "{}") })
-        do { try await service.delete(id: "11111111-1111-1111-1111-111111111111"); XCTFail() }
+        do { try await service.delete(id: "11111111-1111-1111-1111-111111111111"); XCTFail("delete must throw") }
         catch { XCTAssertEqual(error as? AccountError, .invalidInput) }
     }
 }

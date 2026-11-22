@@ -47,13 +47,7 @@ public struct PartnerApplicationAttempt: Sendable, Equatable {
 }
 
 /// 32 random bytes as 43 unpadded base64url characters, the shape the contract requires.
-public func makeApplicationReceipt() -> String {
-    var bytes = [UInt8](repeating: 0, count: 32)
-    let status = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
-    precondition(status == errSecSuccess, "no secure randomness")
-    return Data(bytes).base64EncodedString()
-        .replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
-}
+public func makeApplicationReceipt() -> String { SecureNonceGenerator().make().raw }
 
 public enum ApplicationSubmitError: Error, Sendable, Equatable {
     /// 422: a field is invalid, or this work email already has an application under review.

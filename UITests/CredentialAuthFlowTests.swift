@@ -11,8 +11,7 @@ import XCTest
         app.launchArguments = ["--stub-backend"]
         app.launchInForeground()
         // Welcome's "I already give — sign in" reaches the sign-in methods.
-        XCTAssertTrue(app.buttons["I already give — sign in"].waitForExistence(timeout: 15))
-        app.buttons["I already give — sign in"].tap()
+        app.buttons["I already give — sign in"].tapWhenReady(timeout: 15)
         return app
     }
 
@@ -27,8 +26,8 @@ import XCTest
 
     private func signInWithPassword(_ app: XCUIApplication, password: String) {
         // Password lives under the "More options" disclosure.
-        app.buttons["More options"].tap()
-        app.buttons["Sign in with email & password"].tap()
+        app.buttons["More options"].tapWhenReady()
+        app.buttons["Sign in with email & password"].tapWhenReady()
         type("alex@example.org", into: app.textFields["Email"], in: app)
         type(password, into: app.secureTextFields["Password"], in: app)
         app.buttons["password-sign-in-submit"].tap()
@@ -36,7 +35,7 @@ import XCTest
 
     func testNewDonorSignupThenEmailedLinkLandsInDonorShell() {
         let app = launch()
-        app.buttons["create-account"].tap()
+        app.buttons["create-account"].tapWhenReady()
         XCTAssertTrue(app.textFields["Full name"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["Create account"].isEnabled, "an empty form must not submit")
         type("Alex Rivera", into: app.textFields["Full name"], in: app)

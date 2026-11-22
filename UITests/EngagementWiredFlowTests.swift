@@ -101,8 +101,7 @@ import XCTest
 
         app.buttons["share-invite"].tap()
         let sheet = app.otherElements["ActivityListView"]
-        XCTAssertTrue(sheet.waitForExistence(timeout: 10) || app.collectionViews.firstMatch.waitForExistence(timeout: 5),
-                      "the system share sheet should present the invite")
+        XCTAssertTrue(sheet.waitForExistence(timeout: 10), "the system share sheet should present the invite")
     }
 
     func testShowQRPresentsTheCode() {

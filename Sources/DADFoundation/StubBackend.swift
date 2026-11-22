@@ -3,6 +3,15 @@ import Foundation
 import HTTPTypes
 import OpenAPIRuntime
 
+public final class InMemoryCredentialStore: CredentialStore, @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: Credentials?
+    public init(_ value: Credentials? = nil) { self.value = value }
+    public func load() throws -> Credentials? { lock.withLock { value } }
+    public func save(_ credentials: Credentials) throws { lock.withLock { value = credentials } }
+    public func clear() throws { lock.withLock { value = nil } }
+}
+
 /// DEBUG-only scripted backend for the simulator UITests. It is NOT a preview double: the app
 /// runs the REAL `WireAuth`, `WireAccountSettings`, `WireAPI`, `AccountSession` and keychain-shaped
 /// store on top of it, so a UITest drives the same code a release build uses, with only the
@@ -24,15 +33,6 @@ import OpenAPIRuntime
 /// portal is an ADMIN at Acme with two users, one unverified figure, an earlier export and no logo. Link
 /// capture answers like the server: referral code `ALEX42` is Alex R's, company code `ACME42` is Acme's, and
 /// any other code keeps the token sent, if any; the checkout records the referral token it was given.
-public final class InMemoryCredentialStore: CredentialStore, @unchecked Sendable {
-    private let lock = NSLock()
-    private var value: Credentials?
-    public init(_ value: Credentials? = nil) { self.value = value }
-    public func load() throws -> Credentials? { lock.withLock { value } }
-    public func save(_ credentials: Credentials) throws { lock.withLock { value = credentials } }
-    public func clear() throws { lock.withLock { value = nil } }
-}
-
 public enum StubBackend {
     public static let origin = URL(string: "https://stub.invalid")!
     /// Where a stub-backed launch keeps its link tokens, apart from a real install's.
@@ -206,6 +206,7 @@ private final class StubTransport: ClientTransport, @unchecked Sendable {
     // Account management: contact details, other sessions, and the employer link. Company code
     // `ACME42` links "Acme"; any other code is unrecognized.
     private var contact = (zip: "78701", city: "Austin", phone: Optional<String>.none)
+    private var timezoneOverride: String?
     private var otherSessions = [#"{"id":"22222222-2222-4222-8222-222222222222","client":"BROWSER","platform":null,"label":"Web browser","created_at":"2026-10-02T10:00:00Z","last_used_at":"2026-10-29T10:00:00Z","current":false}"#]
     private var employer: String?
     private var team: String?
@@ -291,9 +292,6 @@ private final class StubTransport: ClientTransport, @unchecked Sendable {
         default: return nil
         }
     }
-
-
-    // MARK: events
 
     private struct StubEvent {
         let id: String, slug: String, title: String, type: String, venue: String, city: String
@@ -389,8 +387,6 @@ private final class StubTransport: ClientTransport, @unchecked Sendable {
         }
     }
 
-    // MARK: engagement
-
     private static let badges = #"{"badges":[{"code":"F","title":"Founding Donor","rule":"Start a monthly gift before January 2027, or join the website waitlist","perk":"FOUNDING_EVENTS","earned":true,"earned_at":"2026-09-02T10:00:00Z","artwork":"f","city":null,"display_title":"Founding Donor"},{"code":"7","title":"One Week","rule":"Reach a 7-day streak","perk":"","earned":true,"earned_at":"2026-10-14T10:00:00Z","artwork":"7","city":null,"display_title":"One Week"},{"code":"30","title":"One Month","rule":"Reach a 30-day streak","perk":"","earned":false,"earned_at":null,"artwork":"30","city":null,"display_title":"One Month"},{"code":"1K","title":"1,000 Days","rule":"Reach a 1,000-day streak","perk":"MILESTONE_EVENTS","earned":false,"earned_at":null,"artwork":"1k","city":null,"display_title":"1,000 Days"},{"code":"TC","title":"Team Captain","rule":"Twenty people you invited complete a gift","perk":"TEAM_CAPTAIN","earned":false,"earned_at":null,"artwork":"tc","city":null,"display_title":"Team Captain"},{"code":"CITY50","title":"Top 50 City","rule":"Rank in the top 50 donors in your city","perk":"","earned":true,"earned_at":"2026-10-20T10:00:00Z","artwork":"c50","city":"Chicago","display_title":"Top 50 in Chicago"}]}"#
     private static let network = #"{"active_count":3,"annualized_minor":474500,"next_milestone":{"label":"Team Captain","target":20,"remaining":17},"invitees":[{"name":"Sam L","active":true},{"name":"Jo P","active":false}],"anonymous_active":1}"#
     private static let conversions = #"{"conversions":[{"converted_at":"2026-10-20T10:00:00Z","kind":"LINK"},{"converted_at":"2026-10-02T10:00:00Z","kind":"IRL"}],"more":false}"#
@@ -403,11 +399,7 @@ private final class StubTransport: ClientTransport, @unchecked Sendable {
 
     /// The dashboard with the donor's current rankings choice applied: opted out hides the rank, as the server does.
     private func readyDashboard() -> String {
-        guard lock.withLock({ prefs["rankings_opted_out"] }) == true else { return Self.ready }
-        guard let start = Self.ready.range(of: #""rank":{"#), let end = Self.ready.range(of: #"},"rankings_opted_out":false"#) else { return Self.ready }
-        var out = Self.ready
-        out.replaceSubrange(start.lowerBound..<end.upperBound, with: #""rank":null,"rankings_opted_out":true"#)
-        return out
+        lock.withLock({ prefs["rankings_opted_out"] }) == true ? Self.readyOptedOut : Self.ready
     }
 
     private func engagement(_ request: HTTPRequest, _ payload: String, authorized: Bool,
@@ -487,9 +479,9 @@ private final class StubTransport: ClientTransport, @unchecked Sendable {
             return reply(.ok, #"{"categories":[{"category":"Water","amount_minor":1800000},{"category":"Housing","amount_minor":1200000}]}"#)
         case (.get, "/donor/partner/our-people"):
             let workforce = lock.withLock { partnerWorkforce }
-            return reply(.ok, #"{"enrolled":86,"workforce_size":\#(workforce),"given_minor":940000,"matched_minor":470000,"avg_streak_days":42,"volunteer_minutes":6300,"teams":2,"suppressed":false}"#)
+            return reply(.ok, #"{"enrolled":86,"workforce_size":\#(workforce),"streak_verified":true,"given_minor":940000,"matched_minor":470000,"avg_streak_days":42,"volunteer_minutes":6300,"teams":2,"suppressed":false}"#)
         case (.get, "/donor/partner/teams"):
-            return reply(.ok, #"{"teams":[{"team_id":"t1","name":"Engineering","active_givers":31,"annualized_minor":1200000,"avg_streak_days":40,"volunteer_minutes":1200},{"team_id":"t2","name":"Sales","active_givers":12,"annualized_minor":600000,"avg_streak_days":18,"volunteer_minutes":300}]}"#)
+            return reply(.ok, #"{"teams":[{"team_id":"t1","name":"Engineering","metrics_verified":true,"active_givers":31,"annualized_minor":1200000,"avg_streak_days":40,"volunteer_minutes":1200},{"team_id":"t2","name":"Sales","metrics_verified":true,"active_givers":12,"annualized_minor":600000,"avg_streak_days":18,"volunteer_minutes":300}]}"#)
         case (.get, "/donor/partner/users"):
             return reply(.ok, #"{"users":[\#(lock.withLock { partnerUsers }.joined(separator: ","))]}"#)
         case (.post, "/donor/partner/users"):
@@ -564,7 +556,12 @@ private final class StubTransport: ClientTransport, @unchecked Sendable {
         case (.post, "/donor/me/profile"):
             let zip = fields["zip"] as? String ?? "", city = fields["city"] as? String ?? "", phone = fields["phone"] as? String ?? ""
             guard zip.isEmpty || zip.range(of: "^[0-9]{5}(-[0-9]{4})?$", options: .regularExpression) != nil else { return reply(.unprocessableContent, "{}") }
-            lock.withLock { contact = (zip, city, phone.isEmpty ? nil : phone) }
+            let zone = fields["timezone_override"] as? String
+            guard zone == nil || StreakTimeZone.choices.contains(where: { $0.value == zone }) else { return reply(.unprocessableContent, "{}") }
+            lock.withLock {
+                contact = (zip, city, phone.isEmpty ? nil : phone)
+                if let zone { timezoneOverride = zone.isEmpty ? nil : zone }
+            }
             return reply(.ok, profile())
         case (.post, "/donor/me/email-change"):
             let email = fields["email"] as? String ?? ""
@@ -593,7 +590,7 @@ private final class StubTransport: ClientTransport, @unchecked Sendable {
             let (org, name) = lock.withLock { (employer, team) }
             guard let org else { return reply(.ok, #"{"partner_id":"","organization":"","leaderboard":[]}"#) }
             let mine = name.map { #","team_id":"33333333-3333-4333-8333-333333333333","team_name":"\#($0)""# } ?? ""
-            return reply(.ok, #"{"partner_id":"44444444-4444-4444-8444-444444444444","organization":"\#(org)"\#(mine),"leaderboard":[{"team_id":"55555555-5555-4555-8555-555555555555","name":"Design","active_givers":7,"annualized_minor":420000,"avg_streak_days":21,"volunteer_minutes":180}]}"#)
+            return reply(.ok, #"{"partner_id":"44444444-4444-4444-8444-444444444444","organization":"\#(org)"\#(mine),"leaderboard":[{"team_id":"55555555-5555-4555-8555-555555555555","name":"Design","metrics_verified":true,"active_givers":7,"annualized_minor":420000,"avg_streak_days":21,"volunteer_minutes":180}]}"#)
         case (.post, "/donor/me/employer"):
             guard fields["company_code"] as? String == "ACME42" else { return reply(.unprocessableContent, "{}") }
             lock.withLock { employer = "Acme" }
@@ -617,8 +614,10 @@ private final class StubTransport: ClientTransport, @unchecked Sendable {
     private func profile() -> String {
         lock.withLock {
             let flags = prefs.map { "\"\($0.key)\":\($0.value)" }.sorted().joined(separator: ",")
+            let zone = timezoneOverride.map { "\"\($0)\"" } ?? "null"
+            let correction = timezoneOverride.map { ",\"timezone_override\":\"\($0)\"" } ?? ""
             let phone = contact.phone.map { "\"\($0)\"" } ?? "null"
-            return "{\"email\":\"alex@example.org\",\"public_name\":\"Alex\",\"account_role\":\"DONOR\",\"zip\":\"\(contact.zip)\",\"city\":\"\(contact.city)\",\"timezone\":null,\"phone\":\(phone),\(flags),\"volunteer_interests\":[],\"version\":\(version),\"consent_version\":\"stub-v1\"}"
+            return "{\"email\":\"alex@example.org\",\"public_name\":\"Alex\",\"account_role\":\"DONOR\",\"zip\":\"\(contact.zip)\",\"city\":\"\(contact.city)\",\"timezone\":\(zone)\(correction),\"phone\":\(phone),\(flags),\"volunteer_interests\":[],\"version\":\(version),\"consent_version\":\"stub-v1\"}"
         }
     }
 
@@ -629,11 +628,10 @@ private final class StubTransport: ClientTransport, @unchecked Sendable {
         (payload.data(using: .utf8).flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [String: Any]) ?? [:]
     }
 
-    // MARK: donor-home reads
-
     private static let reads = ["/donor/me/dashboard", "/donor/me/today-initiative", "/donor/me/gifts", "/donor/me/receipts/", "/donor/me/annual-summary/"]
     private static let giftTotal = 120
     private static let ready = #"{"state":"ready","mode":"test","computed_at":"2026-10-30T12:00:00Z","founding_donor":true,"referrals":{"currency":"USD","irl":1,"irl_minor":3000,"link":2,"link_minor":9000,"total_minor":12000},"streak":{"at_risk":false,"current":18,"grace_ends_at":null,"ladder":{"days":18,"last_milestone":7,"next_milestone":30,"days_to_next":12,"bar":[true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,false,false,false,false,false,false,false,false,false,false,false,false]}},"rank":{"national_percentile":2,"city":"Austin","city_rank":4,"computed_at":"2026-10-30T00:00:00Z"},"rankings_opted_out":false,"network":{"active_count":3,"annualized_minor":474500,"currency":"USD"},"impact":{"given_minor":124000,"currency":"USD","initiatives_funded":4,"events_volunteered":2}}"#
+    private static let readyOptedOut = #"{"state":"ready","mode":"test","computed_at":"2026-10-30T12:00:00Z","founding_donor":true,"referrals":{"currency":"USD","irl":1,"irl_minor":3000,"link":2,"link_minor":9000,"total_minor":12000},"streak":{"at_risk":false,"current":18,"grace_ends_at":null,"ladder":{"days":18,"last_milestone":7,"next_milestone":30,"days_to_next":12,"bar":[true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,false,false,false,false,false,false,false,false,false,false,false,false]}},"rank":null,"rankings_opted_out":true,"network":{"active_count":3,"annualized_minor":474500,"currency":"USD"},"impact":{"given_minor":124000,"currency":"USD","initiatives_funded":4,"events_volunteered":2}}"#
     private static let unranked = #"{"state":"ready","mode":"test","computed_at":"2026-10-30T12:00:00Z","founding_donor":false,"referrals":null,"streak":null,"rank":null,"rankings_opted_out":true,"network":null,"impact":{"given_minor":null,"currency":"USD","initiatives_funded":0,"events_volunteered":0}}"#
     private static let today = #"{"initiative_id":"11111111-1111-4111-8111-111111111111","slug":"meals-on-wheels","title":"Meals on Wheels","summary":"Hot meals delivered to neighbours who cannot cook for themselves.","region":"TX","location":"Austin, TX","type":"PROGRAM","started_on":"2025-01-02","metrics":[{"label":"Meals this week","value":1200,"unit":"PEOPLE","verified_on":"2026-10-28"},{"label":"Cost per meal","value":425,"unit":"USD_CENTS","verified_on":"2026-10-28"},{"label":"Partners","value":1,"unit":"PARTNERS","verified_on":"2026-10-28"}],"distinct_shown":4}"#
 
@@ -697,7 +695,7 @@ private final class StubTransport: ClientTransport, @unchecked Sendable {
 
     func send(_ request: HTTPRequest, body: HTTPBody?, baseURL: URL, operationID: String) async throws -> (HTTPResponse, HTTPBody?) {
         var payload = ""
-        if let body { payload = try await String(collecting: body, upTo: 8192) }
+        if let body { payload = try await String(collecting: body, upTo: 262_144) }
         let authorized = request.headerFields[.authorization].map { $0.hasPrefix("Bearer stub-access-") } ?? false
         let isDeleted = lock.withLock { deleted }
         func reply(_ status: HTTPResponse.Status, _ json: String = "{}") -> (HTTPResponse, HTTPBody?) {

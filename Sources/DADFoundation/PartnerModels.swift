@@ -2,7 +2,18 @@ import Foundation
 
 // Partner portal view models + the service seam. The models own explicit load/ready/failed state,
 // role-gated actions and push register/unregister, so they are unit-tested without a network or UI —
-// the same shape as the donor models (C/D/E).
+// the same shape as the donor models.
+
+public enum PartnerReportLimit: Error, Sendable, Equatable {
+    case daily, storage, tooLarge
+    public var message: String {
+        switch self {
+        case .daily: "This organization has reached today’s report limit. Try after midnight UTC. Existing reports remain available."
+        case .storage: "Report storage is full. Download an existing report or contact DAD support."
+        case .tooLarge: "This report is too large to export. Existing reports remain available; contact DAD support."
+        }
+    }
+}
 
 /// The seam the partner models call. A conformer maps to the generated client under the 12-hour
 /// partner session (`WirePartner`) or a preview/test double; all value types so the models stay testable.
@@ -61,7 +72,6 @@ public struct PartnerReportFile: Sendable, Equatable, Identifiable {
     public init(url: URL) { self.url = url }
 }
 
-// MARK: - Partner portal model (P-10..P-14)
 
 @MainActor
 @Observable
@@ -91,7 +101,9 @@ public final class PartnerModel {
     public private(set) var signedOut = false
     public private(set) var isBusy = false
     /// A report ready to share.
-    public var report: PartnerReportFile?
+    public var report: PartnerReportFile? {
+        didSet { if let old = oldValue, old.url != report?.url { try? FileManager.default.removeItem(at: old.url) } }
+    }
 
     /// The user awaiting an inline remove confirmation, if any.
     public private(set) var pendingRemoval: PartnerUser?
@@ -192,6 +204,8 @@ public final class PartnerModel {
             actionError = invalid
         } catch AccountError.conflict where conflict != nil {
             actionError = conflict
+        } catch let limit as PartnerReportLimit {
+            actionError = limit.message
         } catch AccountError.forbidden {
             actionError = "Only an admin can do that."
         } catch {
@@ -301,13 +315,18 @@ public final class PartnerModel {
 
     public func signOut() async {
         try? await service.unregisterPushDevice()
-        try? await service.signOut()
-        signedOut = true
+        do {
+            try await service.signOut()
+            report = nil
+            signedOut = true
+        } catch {
+            actionError = error.userMessage
+        }
     }
 
     private static func file(_ pdf: Data, name: String) throws -> PartnerReportFile {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(name).appendingPathExtension("pdf")
-        try pdf.write(to: url, options: .atomic)
+        try pdf.write(to: url, options: [.atomic, .completeFileProtection])
         return PartnerReportFile(url: url)
     }
 
@@ -318,7 +337,6 @@ public final class PartnerModel {
     }
 }
 
-// MARK: - Partner sign-in (approved partner users sign in with an emailed link)
 
 public protocol PartnerSignInService: Sendable {
     func requestSignInLink(email: String) async throws
@@ -383,7 +401,7 @@ public final class PartnerSignInModel {
         let token = URLComponents(string: text)?.fragment.flatMap { fragment in
             URLComponents(string: "?" + fragment)?.queryItems?.first { $0.name == "token" }?.value
         } ?? text
-        guard !token.isEmpty, !token.contains(" ") else {
+        guard !token.isEmpty, !token.contains(" "), !token.contains("://") else {
             phase = .failed("Paste the whole sign-in link from your email.")
             return
         }
@@ -391,4 +409,14 @@ public final class PartnerSignInModel {
     }
 
     public func edit() { phase = .editing }
+}
+
+/// Volunteered time for display: minutes under an hour, otherwise hours to one decimal, so a 59-minute
+/// total never reads as "0 hours".
+public enum VolunteerTime {
+    public static func label(minutes: Int64) -> String {
+        if minutes < 60 { return minutes == 1 ? "1 minute" : "\(minutes) minutes" }
+        let hours = (Double(minutes) / 60).formatted(.number.precision(.fractionLength(0...1)).locale(Locale(identifier: "en_US")))
+        return hours == "1" ? "1 hour" : "\(hours) hours"
+    }
 }

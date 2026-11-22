@@ -38,14 +38,16 @@ private actor FakeManagement: AccountManagementService {
     ]
     var team = EmployerTeam(organization: nil, teamName: nil, leaderboard: [])
     var everywhere = 0
+    var employerReadFailure: AccountError?
 
     func fail(_ error: AccountError?) { failure = error }
+    func failEmployerReads(_ error: AccountError?) { employerReadFailure = error }
     private func check() throws { if let failure { throw failure } }
 
-    func saveProfile(zip: String, city: String, phone: String) async throws -> AccountProfileSummary {
+    func saveProfile(zip: String, city: String, phone: String, timezoneOverride: String?) async throws -> AccountProfileSummary {
         try check()
         saved.append((zip, city, phone))
-        return AccountProfileSummary(email: "alex@example.org", accountRole: "DONOR", zip: zip, city: city, phone: phone.isEmpty ? nil : phone)
+        return AccountProfileSummary(email: "alex@example.org", accountRole: "DONOR", zip: zip, city: city, phone: phone.isEmpty ? nil : phone, timezone: timezoneOverride, timezoneOverride: timezoneOverride?.isEmpty == false ? timezoneOverride : nil)
     }
     func requestEmailChange(to email: String) async throws { try check(); emailRequests.append(email) }
     func sessions() async throws -> [DeviceSessionSummary] { try check(); return list }
@@ -57,7 +59,11 @@ private actor FakeManagement: AccountManagementService {
     }
     func revokeOtherSessions() async throws -> [DeviceSessionSummary] { try check(); list.removeAll { !$0.current }; return list }
     func signOutEverywhere() async throws { try check(); everywhere += 1 }
-    func employer() async throws -> EmployerTeam { try check(); return team }
+    func employer() async throws -> EmployerTeam {
+        try check()
+        if let employerReadFailure { throw employerReadFailure }
+        return team
+    }
     func enroll(companyCode: String) async throws -> String {
         try check()
         guard companyCode == "ACME42" else { throw AccountError.invalidInput }
@@ -91,6 +97,22 @@ private actor FakeManagement: AccountManagementService {
         XCTAssertEqual(saved.first?.2, "+14155550123")
         XCTAssertEqual(model.profile.zip, "78702")
         XCTAssertFalse(model.canSave, "the saved values are the new baseline")
+    }
+
+    func testTimezoneOnlyCorrectionAndResetAreSavedChanges() async {
+        let service = FakeManagement()
+        let model = ProfileDetailsModel(profile: profile, service: service)
+        model.timezoneOverride = "America/Phoenix"
+        XCTAssertTrue(model.canSave)
+        await model.save()
+        XCTAssertEqual(model.profile.timezoneOverride, "America/Phoenix")
+        XCTAssertFalse(model.canSave)
+        model.timezoneOverride = ""
+        await model.save()
+        XCTAssertNil(model.profile.timezoneOverride)
+        XCTAssertFalse(model.canSave)
+        model.timezoneOverride = "Unsupported/Zone"
+        XCTAssertFalse(model.canSave)
     }
 
     func testProfileRejectedByServerExplainsItself() async {
@@ -183,6 +205,21 @@ private actor FakeManagement: AccountManagementService {
         XCTAssertEqual(joined.teamName, "Platform")
     }
 
+    func testASavedChangeWhoseRefreshFailsIsNotReportedAsAFailedSave() async {
+        let service = FakeManagement()
+        let model = EmployerModel(service: service)
+        await model.load()
+        await service.failEmployerReads(.unavailable)
+        model.companyCode = "ACME42"
+        await model.enroll()
+        XCTAssertEqual(model.actionError, "Saved, but we couldn’t refresh your employer details. Reopen this screen to see them.")
+        XCTAssertEqual(model.companyCode, "", "the enrolment went through, so the typed code is spent")
+        await service.failEmployerReads(nil)
+        await model.load()
+        guard case .ready(let linked) = model.phase else { return XCTFail("\(model.phase)") }
+        XCTAssertEqual(linked.organization, "Acme")
+    }
+
     func testEmployerAlreadyLinkedElsewhere() async {
         let service = FakeManagement()
         let model = EmployerModel(service: service)
@@ -191,6 +228,18 @@ private actor FakeManagement: AccountManagementService {
         model.companyCode = "OTHER"
         await model.enroll()
         XCTAssertEqual(model.actionError, "Your account is already linked to another employer.")
+    }
+
+    func testAnEndedSessionLeavesTheShellFromEveryLoad() async {
+        let service = FakeManagement()
+        await service.fail(.signedOut)
+        let employer = EmployerModel(service: service)
+        await employer.load()
+        XCTAssertTrue(employer.signedOut)
+        let sessions = DeviceSessionsModel(service: service)
+        await sessions.load()
+        XCTAssertTrue(sessions.signedOut)
+        XCTAssertEqual(sessions.phase, .loading, "the screen leaves instead of showing a retry")
     }
 }
 
@@ -215,6 +264,22 @@ final class WireAccountManagementTests: XCTestCase {
         XCTAssertEqual(call?.request.method, .post)
         XCTAssertEqual(call?.request.headerFields[.authorization], "Bearer tok")
         XCTAssertEqual(try sent(call), ["zip": "78701", "city": "Austin", "phone": ""])
+    }
+
+    func testTimezoneCorrectionResetAndOmissionUseDistinctWireValues() async throws {
+        let transport = ScriptedTransport { _, _ in
+            (.ok, profileJSON().replacingOccurrences(of: "\"timezone\":null", with: "\"timezone\":\"America/Phoenix\",\"timezone_override\":\"America/Phoenix\""))
+        }
+        let (wire, _, _) = try make(transport)
+        let saved = try await wire.saveProfile(zip: "78701", city: "Austin", phone: "", timezoneOverride: "America/Phoenix")
+        XCTAssertEqual(saved.timezoneOverride, "America/Phoenix")
+        XCTAssertEqual(saved.timezone, "America/Phoenix")
+        XCTAssertEqual(try sent(transport.calls(to: "/donor/me/profile").last)["timezone_override"], "America/Phoenix")
+        _ = try await wire.saveProfile(zip: "78701", city: "Austin", phone: "", timezoneOverride: "")
+        XCTAssertEqual(try sent(transport.calls(to: "/donor/me/profile").last)["timezone_override"], "")
+        do { _ = try await wire.saveProfile(zip: "", city: "", phone: "", timezoneOverride: "Invalid/Zone"); XCTFail() }
+        catch { XCTAssertEqual(error as? AccountError, .invalidInput) }
+        XCTAssertEqual(transport.calls(to: "/donor/me/profile").count, 2)
     }
 
     func testSaveProfile422IsInvalidInput() async throws {
@@ -262,18 +327,32 @@ final class WireAccountManagementTests: XCTestCase {
         XCTAssertEqual(transport.calls(to: "/donor/logout-all").count, 1)
     }
 
+    func testSignOutEverywhereWith401EndsTheSessionAndWith429KeepsIt() async throws {
+        let expired = try make(ScriptedTransport { _, _ in (.unauthorized, "{}") })
+        try await expired.0.signOutEverywhere()
+        XCTAssertNil(try expired.2.load(), "the server already ended this session, so the device is signed out")
+
+        for body in ["", "{}"] {
+            let limited = try make(ScriptedTransport { _, _ in (.tooManyRequests, body) })
+            do { try await limited.0.signOutEverywhere(); XCTFail("429 must surface") }
+            catch { XCTAssertEqual(error as? AccountError, .rateLimited) }
+            XCTAssertNotNil(try limited.2.load(), "a rate-limited request must not pretend every device was signed out")
+        }
+    }
+
     func testEmployerMapsAnUnlinkedDonorToNoOrganization() async throws {
         let unlinked = try make(ScriptedTransport { _, _ in (.ok, #"{"partner_id":"","organization":"","leaderboard":[]}"#) })
         let none = try await unlinked.0.employer()
         XCTAssertEqual(none, EmployerTeam(organization: nil, teamName: nil, leaderboard: []))
 
         let linked = try make(ScriptedTransport { _, _ in
-            (.ok, #"{"partner_id":"p","organization":"Acme","team_id":"t","team_name":"Platform","leaderboard":[{"team_id":"t","name":"Platform","active_givers":6,"annualized_minor":360000,"avg_streak_days":12,"volunteer_minutes":90}]}"#)
+            (.ok, #"{"partner_id":"p","organization":"Acme","team_id":"t","team_name":"Platform","leaderboard":[{"team_id":"t","name":"Platform","metrics_verified":true,"active_givers":6,"annualized_minor":360000,"avg_streak_days":12,"volunteer_minutes":90}]}"#)
         })
         let team = try await linked.0.employer()
         XCTAssertEqual(team.organization, "Acme")
         XCTAssertEqual(team.teamName, "Platform")
         XCTAssertEqual(team.leaderboard.first?.activeGivers, 6)
+        XCTAssertEqual(team.leaderboard.first?.metricsVerified, true)
     }
 
     func testEnrollAndJoinTeamStatusMapping() async throws {
@@ -294,12 +373,16 @@ final class WireAccountManagementTests: XCTestCase {
 private actor FakeWallet: WalletPassService {
     var available = true
     var fails = false
-    func set(available: Bool, fails: Bool) { self.available = available; self.fails = fails }
+    var throttled = false
+    func set(available: Bool, fails: Bool, throttled: Bool = false) {
+        self.available = available; self.fails = fails; self.throttled = throttled
+    }
     func appleWalletAvailable() async throws -> Bool {
         if fails { throw AccountError.unavailable }
         return available
     }
     func applePass() async throws -> Data {
+        if throttled { throw AccountError.rateLimited }
         if fails { throw AccountError.unavailable }
         return Data("pkpass".utf8)
     }
@@ -338,6 +421,16 @@ private actor FakeWallet: WalletPassService {
         model.passRejected()
         XCTAssertNil(model.pass)
         XCTAssertEqual(model.error, WalletPassModel.failure)
+    }
+
+    func testAThrottledPassSaysToWaitRatherThanRetry() async {
+        let service = FakeWallet()
+        await service.set(available: true, fails: false, throttled: true)
+        let model = WalletPassModel(service: service)
+        await model.check()
+        await model.prepare()
+        XCTAssertNil(model.pass)
+        XCTAssertEqual(model.error, "Too many attempts. Please wait a moment and try again. Your on-screen code still works.")
     }
 }
 

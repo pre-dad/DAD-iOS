@@ -2,7 +2,7 @@ import Foundation
 
 // The analytics sink seam + the buffering recorder. A conformer maps a batch to the generated
 // ingest client (WireAPI) or a test double; the recorder owns buffering, idempotent de-dup, and
-// chunked flush so the "emit the taxonomy once, deliver reliably" behaviour is unit-testable.
+// chunked flush.
 
 /// The seam the recorder flushes through. A conformer POSTs the batch to /analytics/events.
 public protocol AnalyticsSink: Sendable {
@@ -11,10 +11,11 @@ public protocol AnalyticsSink: Sendable {
 
 /// One typed client-side event sink (§9). Call `record` from a flow; the recorder buffers and
 /// flushes. Flushing is idempotent: each record carries a stable id, and a record already
-/// delivered is never re-buffered, so a lifecycle that fires twice still emits one event.
+/// recently delivered is not re-buffered. Older repeats retain their stable id for server deduplication.
 public actor AnalyticsRecorder {
     /// Events kept while the network is unavailable; the oldest are dropped first so memory stays bounded.
     public static let maxBuffered = 500
+    static let deliveredHistoryLimit = 1_000
     private static let baseBackoff: TimeInterval = 30
     private static let maxBackoff: TimeInterval = 900
 
@@ -22,6 +23,7 @@ public actor AnalyticsRecorder {
     private let now: @Sendable () -> Date
     private var buffer: [AnalyticsRecord] = []
     private var deliveredIDs: Set<UUID> = []
+    private var deliveredOrder: [UUID] = []
     private var flushing = false
     private var failures = 0
     private var retryNotBefore: Date?
@@ -30,8 +32,7 @@ public actor AnalyticsRecorder {
         self.sink = sink; self.now = now
     }
 
-    /// Buffer a validated record. A record whose id was already delivered (a retried emit) is
-    /// dropped, so instrumenting a flow that can re-enter never double-counts (§9 "once").
+    /// Keep recent delivered ids in a bounded window; the ingest endpoint deduplicates older repeats.
     public func record(_ record: AnalyticsRecord) {
         guard !deliveredIDs.contains(record.id) else { return }
         guard !buffer.contains(where: { $0.id == record.id }) else { return }
@@ -71,6 +72,12 @@ public actor AnalyticsRecorder {
             }
             let ids = Set(batch.events.map(\.id))
             deliveredIDs.formUnion(ids)
+            deliveredOrder.append(contentsOf: batch.events.map(\.id))
+            if deliveredOrder.count > Self.deliveredHistoryLimit {
+                let excess = deliveredOrder.count - Self.deliveredHistoryLimit
+                deliveredIDs.subtract(deliveredOrder.prefix(excess))
+                deliveredOrder.removeFirst(excess)
+            }
             buffer.removeAll { ids.contains($0.id) }
         }
         failures = 0

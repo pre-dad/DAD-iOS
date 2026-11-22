@@ -6,8 +6,8 @@ import OpenAPIRuntime
 // before it has a portal. The server identifies the application by a private receipt the applicant generated
 // when applying; a native request presents that receipt as its bearer (`applicationStatus`).
 //
-// Since contract 2.11 the app creates that receipt itself by submitting the application natively
-// (`ApplicationSubmit.swift`); this file reads the status back with it and forgets it once it is decided.
+// The app creates that receipt itself by submitting the application natively (`ApplicationSubmit.swift`);
+// this file reads the status back with it and forgets it once it is decided.
 
 /// Where an application stands. A status this build does not know is kept verbatim, never guessed.
 public enum ApplicationState: Sendable, Equatable {
@@ -79,9 +79,6 @@ public struct WireApplicationStatus: ApplicationStatusService {
     init(origin: URL, transport: any ClientTransport, receipt: any CredentialStore) {
         self.origin = origin; self.transport = transport; self.receipt = receipt
     }
-
-    /// Whether a receipt is kept, so the UI can skip the section entirely when there is nothing to show.
-    public var hasReceipt: Bool { ((try? receipt.load()) ?? nil) != nil }
 
     public func discardReceipt() throws { try receipt.clear() }
 

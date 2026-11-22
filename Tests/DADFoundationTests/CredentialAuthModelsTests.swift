@@ -1,4 +1,5 @@
 import Foundation
+import HTTPTypes
 import XCTest
 @testable import DADFoundation
 
@@ -294,9 +295,18 @@ final class CredentialRulesTests: XCTestCase {
         XCTAssertEqual(service.calls[1].0, "old one here")
     }
 
+    func testTheLengthHintStatesBytesNotCharacters() {
+        let model = PasswordChangeModel(service: FakePasswordSettings())
+        model.newPassword = "short"
+        XCTAssertEqual(model.newPasswordHint, CredentialRules.passwordRule)
+        XCTAssertTrue(CredentialRules.passwordRule.contains("bytes"))
+        model.newPassword = String(repeating: "é", count: 37)
+        XCTAssertNotNil(model.newPasswordHint, "37 characters of two bytes each exceed 72 bytes")
+    }
+
     func testFailureMessagesAndSessionLoss() async {
         let cases: [(AccountError, String, Bool)] = [
-            (.passwordIncorrect, "current password didn’t match", false), (.invalidInput, "12 to 72", false),
+            (.passwordIncorrect, "current password didn’t match", false), (.invalidInput, "12 to 72 bytes", false),
             (.rateLimited, "Too many", false), (.unavailable, "couldn’t save", false), (.signedOut, "sign in again", true),
         ]
         for (error, fragment, signsOut) in cases {
@@ -308,7 +318,8 @@ final class CredentialRulesTests: XCTestCase {
             guard case .failed(let message) = model.phase else { return XCTFail("\(error)") }
             XCTAssertTrue(message.contains(fragment), "\(error): \(message)")
             XCTAssertEqual(model.signedOut, signsOut, "\(error)")
-            XCTAssertEqual(model.newPassword, "a long enough passphrase", "a failed save keeps the form for a retry")
+            XCTAssertEqual(model.newPassword, signsOut ? "" : "a long enough passphrase",
+                           signsOut ? "an ended session clears the secrets" : "a failed save keeps the form for a retry")
         }
     }
 }
@@ -320,8 +331,16 @@ final class SignInCapabilityTests: XCTestCase {
         XCTAssertTrue(capabilities.isAvailable(.phone))
         XCTAssertTrue(capabilities.isAvailable(.password))
         for method in [SignInMethod.apple, .google, .passkey] { XCTAssertFalse(capabilities.isAvailable(method), method.rawValue) }
-        XCTAssertTrue(capabilities.hasUnavailableMethod)
+        XCTAssertEqual(capabilities.unavailableNote, "Apple, Google and passkey sign-in aren’t available in this build yet.")
         XCTAssertEqual(SignInCapabilities(config: SignInConfig(appleFlag: nil, googleClientID: nil, passkeyRelyingParty: nil)), .none)
+    }
+
+    func testTheUnavailableNoteNamesOnlyTheMissingMethods() {
+        XCTAssertNil(SignInCapabilities(apple: true, google: true, passkey: true).unavailableNote)
+        XCTAssertEqual(SignInCapabilities(apple: true, google: false, passkey: true).unavailableNote,
+                       "Google sign-in isn’t available in this build yet.")
+        XCTAssertEqual(SignInCapabilities(apple: false, google: true, passkey: false).unavailableNote,
+                       "Apple and passkey sign-in aren’t available in this build yet.")
     }
 
     func testEachMethodSwitchesOnlyWithItsOwnValidConfiguration() {
@@ -475,9 +494,9 @@ private let modelOptionsJSON = #"{"ceremony":"\#(String(repeating: "c", count: 4
     }
 
     func testServerRejectionAndOutageMessages() async {
-        for (status, fragment) in [(HTTPStatusBox(401), "didn’t work"), (HTTPStatusBox(429), "Too many"), (HTTPStatusBox(503), "isn’t available right now")] {
+        for (status, fragment) in [(HTTPResponse.Status.unauthorized, "didn’t work"), (.tooManyRequests, "Too many"), (.serviceUnavailable, "isn’t available right now")] {
             let transport = ScriptedTransport { seen, _ in
-                (seen.request.path ?? "").hasSuffix("/options") ? (.ok, modelOptionsJSON) : (status.status, "{}")
+                (seen.request.path ?? "").hasSuffix("/options") ? (.ok, modelOptionsJSON) : (status, "{}")
             }
             let model = PasskeySignInModel(authenticator: FakeAuthenticator(result: .success(assertion)),
                                            service: WireCredentialAuth(origin: testOrigin, transport: transport), establish: establishDirectly)
@@ -494,12 +513,4 @@ private let modelOptionsJSON = #"{"ceremony":"\#(String(repeating: "c", count: 4
         await model.start()
         XCTAssertEqual(model.phase, .failed("Passkeys aren’t available on this device."))
     }
-}
-
-import HTTPTypes
-
-private struct HTTPStatusBox {
-    let status: HTTPResponse.Status
-    var code: Int { status.code }
-    init(_ code: Int) { status = HTTPResponse.Status(code: code) }
 }
