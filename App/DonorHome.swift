@@ -288,9 +288,9 @@ private struct DashboardCards: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Giving streak").font(.caption).textCase(.uppercase).foregroundStyle(Color.dad("dkmut"))
             if let streak = dashboard.streak {
-                Text("\(streak.current)").font(.dadDisplay(.largeTitle, size: streakSize))
+                Text("\(streak.days)").font(.dadDisplay(.largeTitle, size: streakSize))
                     .accessibilityIdentifier("streak-count").accessibilityLabel(streak.headline)
-                Text("\(streak.current == 1 ? "day" : "days")").font(.footnote).foregroundStyle(Color.dad("dkmut"))
+                Text("\(streak.days == 1 ? "day" : "days")").font(.footnote).foregroundStyle(Color.dad("dkmut"))
                 if let ladder = streak.ladder {
                     let filled = ladder.bar.filter { $0 }.count
                     DADStreakBar(filled: filled, total: max(ladder.bar.count, 1))
