@@ -291,7 +291,9 @@ checklist; they cannot run on the CI simulator:
   installing, open “Have an invitation?” on the welcome screen and paste that link.
   The app validates the configured DAD origin and captures it through the existing
   native attribution API before signup; successful captures persist with the app's
-  other link tokens. Clipboard access is explicit, never read at launch. This handoff
+  other link tokens. Pasted invitations are verified without sending an earlier touch;
+  an unknown or unavailable link leaves earlier attribution intact and reports failure.
+  Clipboard access is explicit, never read at launch. This handoff
   records a new visit when the person submits the link, under the existing 30-day
   attribution rules; it does not silently recover a browser's original touch time.
 - Offline and flaky-network walk (airplane mode mid-checkout, mid-sign-in, mid-reservation) on device.

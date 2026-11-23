@@ -29,7 +29,7 @@ final class LinkAttributionTests: XCTestCase {
                 ? (.ok, #"{"captured":true,"token":"\#(token)"}"#)
                 : (.ok, #"{"captured":true,"public_name":null,"token":"\#(token)"}"#)
         }
-        let (attribution, links, sources) = try make(transport)
+        let (attribution, links, sources) = try make(transport, tokens: LinkTokens(referral: kept, company: kept))
         let router = try LinkRouter(publicOrigin: URL(string: "https://dad.test")!)
         let referral = await attribution.captureInvitation(" https://dad.test/r/ALEX42?via=irl\n", router: router)
         let company = await attribution.captureInvitation("https://dad.test/c/ACME42", router: router)
@@ -39,6 +39,7 @@ final class LinkAttributionTests: XCTestCase {
         XCTAssertEqual(sources.all, ["IRL", "company"])
         XCTAssertEqual(try body(transport.seen[0])["kind"] as? String, "IRL")
         XCTAssertEqual(transport.seen[1].request.path, "/donor/company/ACME42")
+        for call in transport.seen { XCTAssertNil(try body(call)["token"] as? String) }
     }
 
     func testPastedProofsForeignOriginsAndMalformedInvitationsNeverReachTheAPI() async throws {
@@ -80,6 +81,25 @@ final class LinkAttributionTests: XCTestCase {
         }
         XCTAssertEqual(links.load(), LinkTokens(referral: kept, company: kept))
         XCTAssertTrue(sources.all.isEmpty)
+    }
+
+    func testUnknownPastedInvitationsCannotMistakeAnEarlierTouchForANewCapture() async throws {
+        let transport = ScriptedTransport { seen, _ in
+            let fields = try JSONSerialization.jsonObject(with: Data(seen.body.utf8)) as? [String: Any]
+            let token = fields?["token"] as? String
+            let tokenJSON = token.map { "\"\($0)\"" } ?? "null"
+            let name = seen.request.path?.hasPrefix("/donor/referrals/") == true ? ",\"public_name\":null" : ""
+            return (.ok, "{\"captured\":\(token != nil),\"token\":\(tokenJSON)\(name)}")
+        }
+        let (attribution, links, sources) = try make(transport, tokens: LinkTokens(referral: kept, company: kept))
+        let router = try LinkRouter(publicOrigin: URL(string: "https://dad.test")!)
+        for link in ["https://dad.test/r/UNKNOWN", "https://dad.test/c/UNKNOWN"] {
+            let saved = await attribution.captureInvitation(link, router: router)
+            XCTAssertFalse(saved, "the API retains an earlier token for an unknown code")
+        }
+        XCTAssertEqual(links.load(), LinkTokens(referral: kept, company: kept))
+        XCTAssertTrue(sources.all.isEmpty)
+        for call in transport.seen { XCTAssertNil(try body(call)["token"] as? String) }
     }
 
     private func make(_ transport: ScriptedTransport, tokens: LinkTokens = LinkTokens()) throws -> (LinkAttribution, MemoryLinkTokens, Sources) {
