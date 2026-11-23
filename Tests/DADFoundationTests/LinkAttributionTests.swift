@@ -70,6 +70,18 @@ final class LinkAttributionTests: XCTestCase {
         XCTAssertEqual(links.load().referral, token)
     }
 
+    func testRemovedPastedInvitationsKeepThePreviousTouchesWithoutReportingSuccess() async throws {
+        let transport = ScriptedTransport { _, _ in (.notFound, "{}") }
+        let (attribution, links, sources) = try make(transport, tokens: LinkTokens(referral: kept, company: kept))
+        let router = try LinkRouter(publicOrigin: URL(string: "https://dad.test")!)
+        for link in ["https://dad.test/r/REMOVED", "https://dad.test/c/REMOVED"] {
+            let saved = await attribution.captureInvitation(link, router: router)
+            XCTAssertFalse(saved, "keeping an older token does not mean the pasted invitation was saved")
+        }
+        XCTAssertEqual(links.load(), LinkTokens(referral: kept, company: kept))
+        XCTAssertTrue(sources.all.isEmpty)
+    }
+
     private func make(_ transport: ScriptedTransport, tokens: LinkTokens = LinkTokens()) throws -> (LinkAttribution, MemoryLinkTokens, Sources) {
         let store = MemoryStore(Credentials(access: "tok", refresh: "ref", expiresAt: .distantFuture))
         let session = try AccountSession(api: WireAPI(origin: testOrigin, transport: transport), store: store)

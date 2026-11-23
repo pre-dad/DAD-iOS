@@ -68,7 +68,7 @@ public struct WireLinkAttribution: LinkAttributionService {
         case .ok(let response):
             let value = try response.body.json
             return ReferralCaptureResult(token: value.captured ? value.token : nil, referrerName: value.public_name)
-        case .notFound: return ReferralCaptureResult(token: token, referrerName: nil)
+        case .notFound: throw AccountError.notFound
         case .unprocessableContent: throw AccountError.invalidInput
         case .tooManyRequests: throw AccountError.rateLimited
         default: throw AccountError.unavailable
@@ -80,7 +80,7 @@ public struct WireLinkAttribution: LinkAttributionService {
         case .ok(let response):
             let value = try response.body.json
             return value.captured ? value.token : nil
-        case .notFound: return token
+        case .notFound: throw AccountError.notFound
         case .unprocessableContent: throw AccountError.invalidInput
         case .tooManyRequests: throw AccountError.rateLimited
         default: throw AccountError.unavailable
