@@ -505,6 +505,11 @@ struct DADApp: App {
         #endif
     }
 
+    private var invitationCapture: ((String) async -> Bool)? {
+        guard model.acceptsInvitations else { return nil }
+        return { text in await model.captureInvitation(text) }
+    }
+
     @ViewBuilder private var rootContent: some View {
         if showsDonorShell {
             // ONE branch for both "restoring with a stored session" and "signed in as donor":
@@ -525,7 +530,7 @@ struct DADApp: App {
             case .unauthenticated:
                 UnauthenticatedStack(kit: model.kit, establish: model.establish(), notice: model.notice,
                                      invitation: model.invitation,
-                                     onInvitation: model.acceptsInvitations ? model.captureInvitation : nil,
+                                     onInvitation: invitationCapture,
                                      onPasteLink: { model.openPastedLink($0) }, partnerSignIn: model.partnerSignIn,
                                      applicationStatus: model.applicationStatus, applicationSubmit: model.applicationSubmit,
                                      partnerToken: model.pendingPartnerToken,
