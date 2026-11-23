@@ -158,9 +158,10 @@ public struct PartnerInitiative: Sendable, Equatable {
     public let committedMinor: Int64
     public let deployedMinor: Int64
     public let metrics: [PartnerMetric]
+    public let updatedAt: Date?
 
     public init(id: String, title: String, summary: String, status: InitiativeStatus,
-                region: String, committedMinor: Int64, deployedMinor: Int64, metrics: [PartnerMetric]) {
+                region: String, committedMinor: Int64, deployedMinor: Int64, metrics: [PartnerMetric], updatedAt: Date? = nil) {
         self.id = id
         self.title = title
         self.summary = summary
@@ -169,6 +170,7 @@ public struct PartnerInitiative: Sendable, Equatable {
         self.committedMinor = committedMinor
         self.deployedMinor = deployedMinor
         self.metrics = metrics
+        self.updatedAt = updatedAt
     }
 
     /// At most three headline metrics (§7.2) so the tile never over-renders.
@@ -189,10 +191,12 @@ public struct PartnerMetric: Sendable, Equatable {
     public let label: String
     public let value: Int64
     public let unit: Unit
-    public init(label: String, value: Int64, unit: Unit) {
+    public let verifiedOn: String?
+    public init(label: String, value: Int64, unit: Unit, verifiedOn: String? = nil) {
         self.label = label
         self.value = value
         self.unit = unit
+        self.verifiedOn = verifiedOn
     }
     /// Render the value in its unit: money as $, everything else as a grouped count.
     public var valueLabel: String {

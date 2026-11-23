@@ -39,6 +39,16 @@ private let sampleDashboard = DonorDashboard(
 
 private let sampleToday = TodayInitiative(id: "i", slug: "s", title: "Meals", summary: "x", location: "Austin", kind: "PROGRAM", startedOn: "2025-01-01", metrics: [])
 
+final class StreakCardTests: XCTestCase {
+    func testTheStreakIsCountedInDaysNotPaidMonths() {
+        let ladder = StreakLadder(days: 730, lastMilestone: 500, nextMilestone: 1000, daysToNext: 270, bar: Array(repeating: true, count: 30))
+        let card = StreakCard(current: 24, atRisk: false, graceEndsAt: nil, ladder: ladder)
+        XCTAssertEqual(card.days, 730)
+        XCTAssertEqual(card.headline, "730-day streak")
+        XCTAssertEqual(StreakCard(current: 0, atRisk: false, graceEndsAt: nil, ladder: nil).headline, "0-day streak")
+    }
+}
+
 final class RankingLabelTests: XCTestCase {
     func testBothRankCardsClampAndOmitTheSameWay() {
         XCTAssertEqual(DashboardRank(topPercent: 0, city: nil, cityRank: nil).nationalLabel, "Top 1% nationally")

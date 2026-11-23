@@ -144,7 +144,7 @@ final class WireInsightsTests: XCTestCase {
                           panelJSON(#"[{"type":"Chart"}]"#), panelJSON(#"[{"type":"Heading","title":"Hi"}]"#, version: "9")] {
             let value = try await dashboard(malformed)
             XCTAssertNil(value.insights, malformed)
-            XCTAssertEqual(value.streak?.current, 18, malformed)
+            XCTAssertEqual(value.streak?.days, 18, malformed)
         }
     }
 }

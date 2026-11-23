@@ -68,7 +68,7 @@ public struct WireLinkAttribution: LinkAttributionService {
         case .ok(let response):
             let value = try response.body.json
             return ReferralCaptureResult(token: value.captured ? value.token : nil, referrerName: value.public_name)
-        case .notFound: return ReferralCaptureResult(token: token, referrerName: nil)
+        case .notFound: throw AccountError.notFound
         case .unprocessableContent: throw AccountError.invalidInput
         case .tooManyRequests: throw AccountError.rateLimited
         default: throw AccountError.unavailable
@@ -80,7 +80,7 @@ public struct WireLinkAttribution: LinkAttributionService {
         case .ok(let response):
             let value = try response.body.json
             return value.captured ? value.token : nil
-        case .notFound: return token
+        case .notFound: throw AccountError.notFound
         case .unprocessableContent: throw AccountError.invalidInput
         case .tooManyRequests: throw AccountError.rateLimited
         default: throw AccountError.unavailable
@@ -100,7 +100,7 @@ public struct WireLinkAttribution: LinkAttributionService {
     }
 }
 
-/// Keeps the tokens a link visit earns and spends them, as the website's cookies would be: the latest valid
+/// Keeps the tokens ordinary link visits earn and spends them, as the website's cookies would be: the latest valid
 /// link wins, a capture that keeps nothing discards the kept token, and a company token is bound once after
 /// sign-in. Attribution is best effort, so a failed call leaves the kept tokens as they were.
 public final class LinkAttribution: @unchecked Sendable {
@@ -118,30 +118,44 @@ public final class LinkAttribution: @unchecked Sendable {
     /// Records a referral visit and returns the referrer's public name, if the server named one.
     @discardableResult
     public func captureReferral(code: String, inPerson: Bool) async -> String? {
-        await enqueue { await self.referralVisit(code: code, inPerson: inPerson) }.value
+        await enqueue { await self.referralVisit(code: code, inPerson: inPerson) }.value?.referrerName
     }
 
-    private func referralVisit(code: String, inPerson: Bool) async -> String? {
-        guard let result = try? await service.captureReferral(code: code, inPerson: inPerson, token: store.load().referral) else { return nil }
+    private func referralVisit(code: String, inPerson: Bool, verifyingInvitation: Bool = false) async -> ReferralCaptureResult? {
+        let token = verifyingInvitation ? nil : store.load().referral
+        guard let result = try? await service.captureReferral(code: code, inPerson: inPerson, token: token),
+              !verifyingInvitation || result.token != nil else { return nil }
         update { $0.referral = result.token }
         if result.token != nil { captured(inPerson ? "IRL" : "link") }
-        return result.referrerName
+        return result
     }
 
     public func captureCompany(code: String) async {
-        await enqueue { await self.companyVisit(code: code) }.value
+        _ = await enqueue { await self.companyVisit(code: code) }.value
     }
 
-    private func companyVisit(code: String) async {
-        // A thrown error is a transient failure: keep whatever token was stored. A successful call that
-        // returns nil means the visit kept no company window, so the stored token must be discarded —
-        // mirroring `captureReferral`. `try?` would flatten the `String??` and lose that distinction
-        // (binding a non-optional `String`, so a returned-nil would wrongly keep the stale token).
+    private func companyVisit(code: String, verifyingInvitation: Bool = false) async -> Bool {
+        // Keep a successful nil distinct from a thrown error: normal visits can clear an expired
+        // token, while failed calls and failed pasted-link verification preserve the earlier touch.
         let token: String?
-        do { token = try await service.captureCompany(code: code, token: store.load().company) }
-        catch { return }
+        do { token = try await service.captureCompany(code: code, token: verifyingInvitation ? nil : store.load().company) }
+        catch { return false }
+        guard !verifyingInvitation || token != nil else { return false }
         update { $0.company = token }
         if token != nil { captured("company") }
+        return token != nil
+    }
+
+    public func captureInvitation(_ text: String, router: LinkRouter) async -> Bool {
+        // An unknown code can return the earlier token. Verify pasted links without it, and keep
+        // existing attribution locally until a new invitation is actually captured.
+        switch router.invitation(text) {
+        case .referral(let code, let inPerson):
+            return await enqueue { await self.referralVisit(code: code, inPerson: inPerson, verifyingInvitation: true) }.value?.token != nil
+        case .company(let code):
+            return await enqueue { await self.companyVisit(code: code, verifyingInvitation: true) }.value
+        default: return false
+        }
     }
 
     /// Binds a kept company token to the signed-in donor. The token is spent once the server has answered

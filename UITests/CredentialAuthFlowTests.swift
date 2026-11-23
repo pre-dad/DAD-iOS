@@ -4,6 +4,22 @@ import XCTest
 /// scripted transport (`--stub-backend`). Script: password `correct horse battery` signs in; anything
 /// else is the server's 401; the signup link is claimed with a token starting `stubclaim`.
 @MainActor final class CredentialAuthFlowTests: XCTestCase {
+    func testInvitationCopiedBeforeInstallIsValidatedAndSavedBeforeSignup() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--stub-backend"]
+        app.launchInForeground()
+        app.buttons["Have an invitation?"].tapWhenReady(timeout: 15)
+        let link = app.textFields["Invitation link"]
+        type("https://other.invalid/r/ALEX42", into: link, in: app)
+        app.buttons["Save invitation"].tapWhenReady()
+        XCTAssertTrue(app.staticTexts["invitation-error"].waitForExistence(timeout: 10))
+        link.replaceText(with: "https://stub.invalid/r/ALEX42?via=irl", in: app)
+        app.buttons["Save invitation"].tap()
+        XCTAssertTrue(app.staticTexts["Your invitation is saved for this app."].waitForExistence(timeout: 10))
+        app.buttons["Give $1 a day"].tap()
+        XCTAssertTrue(app.textFields["Full name"].waitForExistence(timeout: 5))
+    }
+
     private let stubClaimLink = "https://stub.invalid/account/claim#token=stubclaim0123456789abcdef0123456789abcdef"
 
     private func launch() -> XCUIApplication {

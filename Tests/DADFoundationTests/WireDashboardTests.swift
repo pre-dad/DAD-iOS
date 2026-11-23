@@ -32,7 +32,9 @@ final class WireDashboardTests: XCTestCase {
         let transport = ScriptedTransport { _, _ in (.ok, dashboardReadyJSON(rank: #"{"national_percentile":2,"city":"Austin","city_rank":4,"computed_at":"2026-10-30T00:00:00Z"}"#)) }
         let rig = try make(transport)
         guard case .ready(let dash) = try await rig.service.dashboard() else { return XCTFail("expected ready") }
-        XCTAssertEqual(dash.streak?.current, 18)
+        XCTAssertEqual(dash.streak?.current, 1)
+        XCTAssertEqual(dash.streak?.days, 18)
+        XCTAssertEqual(dash.streak?.headline, "18-day streak")
         XCTAssertEqual(dash.streak?.ladder?.nextMilestone, 30)
         XCTAssertEqual(dash.streak?.ladder?.nextLabel, "12 days to your 30-day milestone")
         XCTAssertEqual(dash.streak?.ladder?.bar, [true, true, true, false])

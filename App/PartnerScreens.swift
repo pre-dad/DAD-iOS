@@ -322,7 +322,18 @@ private struct PartnerInitiativesSection: View {
                 Text(initiative.summary)
                 Text("Committed \(initiative.committedLabel) · Deployed \(initiative.deployedLabel)").font(.footnote)
                 ForEach(initiative.headlineMetrics, id: \.label) { metric in
-                    Text("\(metric.label): \(metric.valueLabel)").font(.footnote)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(metric.label): \(metric.valueLabel)").font(.footnote)
+                        if let verifiedOn = metric.verifiedOn {
+                            Text("Verified \(verifiedOn)").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                if let updatedAt = initiative.updatedAt {
+                    Text("Updated \(updatedAt.formatted(date: .abbreviated, time: .shortened))")
+                        .font(.footnote).foregroundStyle(.secondary)
+                } else {
+                    Text("Update time unavailable").font(.footnote).foregroundStyle(.secondary)
                 }
             }
             .padding(.vertical, 4)

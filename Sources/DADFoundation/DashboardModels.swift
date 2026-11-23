@@ -36,6 +36,7 @@ public func milestoneLine(days: Int) -> String {
 }
 
 public struct StreakCard: Sendable, Equatable {
+    /// Consecutive paid monthly periods. The streak itself is counted in days: `days`.
     public let current: Int
     /// A renewal failed and the donor is inside the 7-day grace period (S-1).
     public let atRisk: Bool
@@ -44,7 +45,9 @@ public struct StreakCard: Sendable, Equatable {
     public init(current: Int, atRisk: Bool, graceEndsAt: Date?, ladder: StreakLadder?) {
         self.current = current; self.atRisk = atRisk; self.graceEndsAt = graceEndsAt; self.ladder = ladder
     }
-    public var headline: String { "\(current)-day streak" }
+    /// The streak length in the donor's local days (S-1); zero when there is no run.
+    public var days: Int { ladder?.days ?? 0 }
+    public var headline: String { "\(days)-day streak" }
 }
 
 /// The donor's own standing (S-4). `topPercent` is the server's *top* bucket: 2 means
