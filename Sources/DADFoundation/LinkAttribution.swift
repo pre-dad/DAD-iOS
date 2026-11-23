@@ -118,30 +118,41 @@ public final class LinkAttribution: @unchecked Sendable {
     /// Records a referral visit and returns the referrer's public name, if the server named one.
     @discardableResult
     public func captureReferral(code: String, inPerson: Bool) async -> String? {
-        await enqueue { await self.referralVisit(code: code, inPerson: inPerson) }.value
+        await enqueue { await self.referralVisit(code: code, inPerson: inPerson) }.value?.referrerName
     }
 
-    private func referralVisit(code: String, inPerson: Bool) async -> String? {
+    private func referralVisit(code: String, inPerson: Bool) async -> ReferralCaptureResult? {
         guard let result = try? await service.captureReferral(code: code, inPerson: inPerson, token: store.load().referral) else { return nil }
         update { $0.referral = result.token }
         if result.token != nil { captured(inPerson ? "IRL" : "link") }
-        return result.referrerName
+        return result
     }
 
     public func captureCompany(code: String) async {
-        await enqueue { await self.companyVisit(code: code) }.value
+        _ = await enqueue { await self.companyVisit(code: code) }.value
     }
 
-    private func companyVisit(code: String) async {
+    private func companyVisit(code: String) async -> Bool {
         // A thrown error is a transient failure: keep whatever token was stored. A successful call that
         // returns nil means the visit kept no company window, so the stored token must be discarded —
         // mirroring `captureReferral`. `try?` would flatten the `String??` and lose that distinction
         // (binding a non-optional `String`, so a returned-nil would wrongly keep the stale token).
         let token: String?
         do { token = try await service.captureCompany(code: code, token: store.load().company) }
-        catch { return }
+        catch { return false }
         update { $0.company = token }
         if token != nil { captured("company") }
+        return token != nil
+    }
+
+    public func captureInvitation(_ text: String, router: LinkRouter) async -> Bool {
+        switch router.invitation(text) {
+        case .referral(let code, let inPerson):
+            return await enqueue { await self.referralVisit(code: code, inPerson: inPerson) }.value?.token != nil
+        case .company(let code):
+            return await enqueue { await self.companyVisit(code: code) }.value
+        default: return false
+        }
     }
 
     /// Binds a kept company token to the signed-in donor. The token is spent once the server has answered

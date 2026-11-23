@@ -22,6 +22,54 @@ final class LinkAttributionTests: XCTestCase {
     private let kept = String(repeating: "k", count: 43)
     private let fresh = String(repeating: "f", count: 43)
 
+    func testPastedInvitationPreservesIRLAndCompanyAttributionAcrossTheInstallHandoff() async throws {
+        let token = fresh
+        let transport = ScriptedTransport { seen, _ in
+            seen.request.path?.hasPrefix("/donor/company/") == true
+                ? (.ok, #"{"captured":true,"token":"\#(token)"}"#)
+                : (.ok, #"{"captured":true,"public_name":null,"token":"\#(token)"}"#)
+        }
+        let (attribution, links, sources) = try make(transport)
+        let router = try LinkRouter(publicOrigin: URL(string: "https://dad.test")!)
+        let referral = await attribution.captureInvitation(" https://dad.test/r/ALEX42?via=irl\n", router: router)
+        let company = await attribution.captureInvitation("https://dad.test/c/ACME42", router: router)
+        XCTAssertTrue(referral)
+        XCTAssertTrue(company)
+        XCTAssertEqual(links.load(), LinkTokens(referral: token, company: token))
+        XCTAssertEqual(sources.all, ["IRL", "company"])
+        XCTAssertEqual(try body(transport.seen[0])["kind"] as? String, "IRL")
+        XCTAssertEqual(transport.seen[1].request.path, "/donor/company/ACME42")
+    }
+
+    func testPastedProofsForeignOriginsAndMalformedInvitationsNeverReachTheAPI() async throws {
+        let transport = ScriptedTransport { _, _ in XCTFail("invalid invitation reached the API"); return (.ok, "{}") }
+        let (attribution, links, sources) = try make(transport, tokens: LinkTokens(referral: kept))
+        let router = try LinkRouter(publicOrigin: URL(string: "https://dad.test")!)
+        for link in ["https://other.test/r/ALEX42", "https://dad.test/account/claim#token=" + kept,
+                     "https://dad.test/r/ALEX42?via=IRL", "https://dad.test/r/a%2Fb", "not a link"] {
+            let saved = await attribution.captureInvitation(link, router: router)
+            XCTAssertFalse(saved)
+        }
+        XCTAssertEqual(links.load().referral, kept)
+        XCTAssertTrue(transport.seen.isEmpty)
+        XCTAssertTrue(sources.all.isEmpty)
+    }
+
+    func testAnUnavailableInvitationCanBeRetriedWithoutDiscardingTheExistingTouch() async throws {
+        let token = fresh
+        let transport = ScriptedTransport { _, count in
+            count == 0 ? (.serviceUnavailable, "{}") : (.ok, #"{"captured":true,"public_name":null,"token":"\#(token)"}"#)
+        }
+        let (attribution, links, _) = try make(transport, tokens: LinkTokens(referral: kept))
+        let router = try LinkRouter(publicOrigin: URL(string: "https://dad.test")!)
+        let failed = await attribution.captureInvitation("https://dad.test/r/ALEX42", router: router)
+        XCTAssertFalse(failed)
+        XCTAssertEqual(links.load().referral, kept)
+        let retried = await attribution.captureInvitation("https://dad.test/r/ALEX42", router: router)
+        XCTAssertTrue(retried)
+        XCTAssertEqual(links.load().referral, token)
+    }
+
     private func make(_ transport: ScriptedTransport, tokens: LinkTokens = LinkTokens()) throws -> (LinkAttribution, MemoryLinkTokens, Sources) {
         let store = MemoryStore(Credentials(access: "tok", refresh: "ref", expiresAt: .distantFuture))
         let session = try AccountSession(api: WireAPI(origin: testOrigin, transport: transport), store: store)

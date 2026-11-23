@@ -322,6 +322,15 @@ final class AccountModel {
         return receive(url, role: nil) == nil
     }
 
+    var acceptsInvitations: Bool { router != nil && linkAttribution != nil }
+
+    func captureInvitation(_ text: String) async -> Bool {
+        guard let router, let linkAttribution else { return false }
+        let saved = await linkAttribution.captureInvitation(text, router: router)
+        if saved { invitation = "Your invitation is saved for this app." }
+        return saved
+    }
+
     /// Routes a tapped link for the signed-in `role` (nil before sign-in); returns a URL for the web
     /// fallback when the app does not handle it here.
     func receive(_ url: URL, role: AppRole?) -> URL? {
@@ -516,6 +525,7 @@ struct DADApp: App {
             case .unauthenticated:
                 UnauthenticatedStack(kit: model.kit, establish: model.establish(), notice: model.notice,
                                      invitation: model.invitation,
+                                     onInvitation: model.acceptsInvitations ? model.captureInvitation : nil,
                                      onPasteLink: { model.openPastedLink($0) }, partnerSignIn: model.partnerSignIn,
                                      applicationStatus: model.applicationStatus, applicationSubmit: model.applicationSubmit,
                                      partnerToken: model.pendingPartnerToken,
