@@ -181,8 +181,10 @@ public struct WirePartner: PartnerService {
                         id: i.id, title: i.title, summary: i.summary, status: InitiativeStatus(contract: i.status),
                         region: i.region, committedMinor: i.committed_minor, deployedMinor: i.deployed_minor,
                         metrics: i.metrics.compactMap { metric in
-                            PartnerMetric.Unit(contract: metric.unit).map { PartnerMetric(label: metric.label, value: metric.value, unit: $0) }
-                        })
+                            PartnerMetric.Unit(contract: metric.unit).map {
+                                PartnerMetric(label: metric.label, value: metric.value, unit: $0, verifiedOn: metric.verified_on)
+                            }
+                        }, updatedAt: i.updated_at)
                 }
             case .unauthorized: throw AccountError.signedOut
             case .forbidden: throw AccountError.forbidden

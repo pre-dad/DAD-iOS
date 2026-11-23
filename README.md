@@ -286,7 +286,16 @@ checklist; they cannot run on the CI simulator:
 - VoiceOver walk, Dynamic Type XXL, and contrast audit on device.
 - Performance on a throttled network: dashboards < 2s, checkout < 60s (PRD §10).
 - Real-device APNs delivery; Apple Pay or the Stripe web handoff end-to-end.
-- Universal-link + deferred-attribution acceptance on a clean install.
+- Universal-link and invitation handoff acceptance on a clean install. Before installing,
+  use “Keep this invitation for the app” on a DAD referral or company-code page. After
+  installing, open “Have an invitation?” on the welcome screen and paste that link.
+  The app validates the configured DAD origin and captures it through the existing
+  native attribution API before signup; successful captures persist with the app's
+  other link tokens. Pasted invitations are verified without sending an earlier touch;
+  an unknown or unavailable link leaves earlier attribution intact and reports failure.
+  Clipboard access is explicit, never read at launch. This handoff
+  records a new visit when the person submits the link, under the existing 30-day
+  attribution rules; it does not silently recover a browser's original touch time.
 - Offline and flaky-network walk (airplane mode mid-checkout, mid-sign-in, mid-reservation) on device.
 - Certificate handling: the app relies on system trust with ATS defaults (no exceptions, HTTPS-only origin
       check); decide before launch whether DAD wants pinning, which is an operational burden on cert rotation.

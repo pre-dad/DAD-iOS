@@ -121,6 +121,8 @@ final class WirePartnerStatusTests: XCTestCase {
         XCTAssertEqual(initiatives.map(\.id), ["i1"])
         XCTAssertEqual(initiatives.first?.status, .active)
         XCTAssertEqual(initiatives.first?.metrics.map(\.label), ["P"], "a metric in a unit this build does not know is hidden, not shown as a people count")
+        XCTAssertEqual(initiatives.first?.metrics.first?.verifiedOn, "2026-10-20")
+        XCTAssertEqual(initiatives.first?.updatedAt, ISO8601DateFormatter().date(from: "2026-10-28T10:00:00Z"))
     }
 
     func testRemoveUserSendsTheIdInThePathAndPartnerPushMapsRejection() async throws {

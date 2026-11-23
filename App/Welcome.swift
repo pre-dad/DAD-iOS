@@ -12,6 +12,10 @@ struct WelcomeScreen: View {
     let onSignIn: () -> Void
     /// Tertiary "Partner organization? Sign in here" → partner sign-in.
     let onPartner: () -> Void
+    var onInvitation: ((String) async -> Bool)?
+    @State private var invitationLink = ""
+    @State private var savingInvitation = false
+    @State private var invitationFailed = false
     @Environment(AnalyticsController.self) private var analytics: AnalyticsController?
     @ScaledMetric(relativeTo: .largeTitle) private var logoSize: CGFloat = 44
 
@@ -41,6 +45,35 @@ struct WelcomeScreen: View {
                     .buttonStyle(DADButtonStyle(.secondary))
                 Button("Partner organization? Sign in here") { analytics?.emit(.roleSelected); onPartner() }
                     .buttonStyle(DADButtonStyle(.tertiary))
+            }
+            .disabled(savingInvitation)
+            if let onInvitation {
+                DisclosureGroup("Have an invitation?") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Copied a DAD invitation before installing? Paste it here before creating your account.")
+                            .font(.footnote)
+                        TextField("Invitation link", text: $invitationLink)
+                            .textFieldStyle(.roundedBorder).keyboardType(.URL)
+                            .textInputAutocapitalization(.never).autocorrectionDisabled()
+                            .accessibilityLabel("Invitation link").disabled(savingInvitation)
+                        Button(savingInvitation ? "Saving invitation…" : "Save invitation") {
+                            guard !savingInvitation else { return }
+                            savingInvitation = true
+                            Task {
+                                let saved = await onInvitation(invitationLink)
+                                invitationFailed = !saved
+                                if saved { invitationLink = "" }
+                                savingInvitation = false
+                            }
+                        }
+                        .buttonStyle(DADButtonStyle(.secondary))
+                        .disabled(savingInvitation || invitationLink.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        if invitationFailed {
+                            Text("We couldn’t save that invitation. Check the DAD link and your connection, then try again.")
+                                .font(.footnote).accessibilityIdentifier("invitation-error")
+                        }
+                    }
+                }
             }
         }
         .frame(maxWidth: 520, alignment: .leading).padding(28).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -385,6 +418,7 @@ struct UnauthenticatedStack: View {
     let establish: PhoneSignInModel.Establish
     let notice: String?
     var invitation: String?
+    var onInvitation: ((String) async -> Bool)?
     let onPasteLink: (String) -> Bool
     var partnerSignIn: (any PartnerSignInService)?
     var applicationStatus: (any ApplicationStatusService)?
@@ -410,7 +444,7 @@ struct UnauthenticatedStack: View {
             WelcomeScreen(notice: notice, invitation: invitation,
                           onGive: { signupOrigin = .roleSelect; step = .signup },
                           onSignIn: { step = .methods },
-                          onPartner: { step = .partner })
+                          onPartner: { step = .partner }, onInvitation: onInvitation)
         case .methods:
             SignInMethods(capabilities: kit.capabilities, onSelect: select, onCreateAccount: { signupOrigin = .methods; step = .signup })
         case .phone:

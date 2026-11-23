@@ -90,6 +90,15 @@ public struct LinkRouter: Sendable {
         if url.query == nil, url.fragment == nil, let code = Self.code(url.path, after: policy.companyPrefix) { return .company(code: code) }
         return .web(url)
     }
+
+    public func invitation(_ text: String) -> LinkIntent? {
+        guard let url = URL(string: text.trimmingCharacters(in: .whitespacesAndNewlines)),
+              let intent = route(url) else { return nil }
+        switch intent {
+        case .referral, .company: return intent
+        default: return nil
+        }
+    }
     /// The one path segment after `prefix`, if it has the shape every referral and company code has.
     private static func code(_ path: String, after prefix: String) -> String? {
         guard path.hasPrefix(prefix) else { return nil }
