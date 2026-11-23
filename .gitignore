@@ -15,6 +15,8 @@ ExportOptions.plist
 Sources/DADFoundation/openapi.json
 Sources/DADFoundation/DADTokens.swift
 Sources/DADFoundation/links.json
+Sources/DADFoundation/ui-catalog.json
+Sources/DADFoundation/ui-binds.json
 Sources/DADFoundation/DADNullValue.swift
 
 # Local working docs (plans, gap analysis) are never committed.

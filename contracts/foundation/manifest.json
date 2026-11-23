@@ -1,14 +1,16 @@
 {
-  "version": "2.13.0",
+  "version": "3.0.0",
   "source_repository": "pre-dad/DAD-Main",
-  "source_revision": "8d1bd0d46f996e6b8beab26f613f154ae105a036",
+  "source_revision": "93437ed6cbad220cca2195898373956e589773fd",
   "files": {
-    "openapi.json": "c5426223726a217ed086fddf1f47d2c5c038365e4ce9c6b0cd79323418a97cfe",
-    "mobile.openapi.json": "8334ff264fb72dfdb23de01c1ea98387c28fb29f429320209e8999a9372661ba",
-    "swift.openapi.json": "d06a82779a0ec71abfce1adcb051099416e94bf084a4c26c6f5ee46a52db3343",
+    "openapi.json": "1edb760b01a46f6edab5ecc91cfee39ef44dad5211d4b52e17471b6f9eec6e14",
+    "mobile.openapi.json": "061cf900965722a9405e4ef9d376b2a31511c85a0badc21b8bc481e87f4a3fd6",
+    "swift.openapi.json": "b9f265903e6acbc833dd6f7e73badc187bb07e617527e97456e9dc107d3cc43b",
     "DADNullValue.swift": "548fa25336cde385a181b16fb959ee3f5b652c2cff4bb870068fe760a0908028",
     "tokens.json": "8f9b86ede46ba830fb991667a191e1b3ebdf13712a06d27a1276275c938efac0",
     "links.json": "462b33a3053d894aa2aeb81f0c9d051c5e74a8aea461f9a47555b0c3e72c59fe",
+    "ui-catalog.json": "5735939a64248802bfe7f4e16e0e3f96c8362b87d1e6f6dc9ade194fb75b9776",
+    "ui-catalog-vectors.json": "adb0316a64788efabb04239e499cb289fea9f02347d7da6b8e068ab84d9a2498",
     "tokens.ts": "04a2b1d917c015bcdf86b1796619ed10c0c77b6fb1ed596df13571d255bdf3c6",
     "DADTokens.swift": "afb00b6b8c2ab3e44c83581be357136a57ea22c8bb3d76de6f8832c127389643",
     "DADTokens.kt": "60d1298022ffcabc3dceb3f49542b810c55229a22d99d88864ad8863ad3d980f"

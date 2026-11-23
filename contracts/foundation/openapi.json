@@ -7,7 +7,7 @@
    "name": "MIT",
    "identifier": "MIT"
   },
-  "description": "The DAD (Dynamic Aid Delivery) donor API, serving the web app, the donor iOS/Android app, and the staff back office.\n\n## Clients and authentication\n- **Browsers** authenticate with HttpOnly cookies. Every mutation must carry the exact configured `Origin`; this is the CSRF defense. The API sends no CORS headers.\n- **The donor app** sends `X-DAD-Client: native` on every request, never sends `Origin` or cookies, and authenticates with `Authorization: Bearer <access token>`. A request with Origin or cookies is a browser request whatever else it carries. Sign in by calling POST /donor/login, opening the emailed `/account/claim#token=\u2026` link in the app, and sending the fragment's token to POST /donor/claim as a native request, which returns a 15-minute access token and a rotating refresh token. Exchange the refresh token at POST /donor/refresh when the access token expires or a request answers 401; send one refresh at a time and keep only the newest tokens. Routes that admit the app list `native` in `x-clients`, and POST /donor/refresh, the push-device routes, POST /donor/me/company-touch, and POST /donor/me/recurring/checkout admit nothing else. The app may record referral and company-code link visits, keeping the returned token in place of the browser's cookie. Giving requires a verified donor session. Native recurring checkout uses its dedicated operation; partner applications admit both browser and native clients. Every staff route is browser-only.\n- **Partner portal** users are separate from donors (P-5). They sign in by calling POST /donor/partner/sign-in and opening the emailed `/partner/accept#token=\u2026` link, whose token POST /donor/partner/accept-invite exchanges for a 12-hour session: an HttpOnly cookie for a browser (`__Host-dad_partner_session` over HTTPS, otherwise `dad_partner_session`), or a bearer token for a native request, sent like the donor app's.\n- Staff routes are browser-only and never accept bearer tokens. The back office runs on its own host (`DONOR_STAFF_ORIGIN`): staff mutations require that exact `Origin`, and donor and public mutations require the public one, so neither site can act on the other.\n\n## Rate limits\nMutations are rate limited per client address and class (`x-rate-limit`): auth 10/min, visitor 60/min, account 30/min, staff 60/min, with bursts up to the same size. Exceeding one answers 429 with `Retry-After`. Reads are not rate limited by the API.\n\n## Conventions\n- Errors are always `application/json` `{\"detail\": \"\u2026\"}` with the status below; the detail is safe to display. A 503 for a feature the deployment has not configured adds a stable `code` and should not be retried. Unknown routes and malformed record IDs answer 404, wrong methods 405 with `Allow`.\n- Request bodies are one JSON object with exactly the documented fields (unknown fields, trailing data, NUL characters, and `null` for a defaulted field are 422), at most 256 KiB unless stated (larger is 413).\n- Money is integer USD cents in fields ending `_minor`; the API shows the same numbers on every client.\n- Timestamps are RFC 3339 strings, UTC, possibly with fractional seconds (`2026-10-06T14:03:00Z`, `\u2026+00:00` in gift records). Dates are `YYYY-MM-DD`.\n- Lists page by `offset`, 50 rows per page; a response's `next_offset` (or `next_<list>_offset`) is the next page's offset, or null on the last page.\n- Commands that reach the payment processor or deliver email require an `Idempotency-Key`; retry with the same key after a timeout or 503.\n- Every response is `Cache-Control: no-store` except published content.\n"
+  "description": "The DAD (Dynamic Aid Delivery) donor API, serving the web app, the donor iOS/Android app, and the staff back office.\n\n## Clients and authentication\n- **Browsers** authenticate with HttpOnly cookies. Every mutation must carry the exact configured `Origin`; this is the CSRF defense. The API sends no CORS headers.\n- **The donor app** sends `X-DAD-Client: native` on every request, never sends `Origin` or cookies, and authenticates with `Authorization: Bearer <access token>`. A request with Origin or cookies is a browser request whatever else it carries. Sign in by calling POST /donor/login, opening the emailed `/account/claim#token=\u2026` link in the app, and sending the fragment's token to POST /donor/claim as a native request, which returns a 15-minute access token and a rotating refresh token. Exchange the refresh token at POST /donor/refresh when the access token expires or a request answers 401; send one refresh at a time and keep only the newest tokens. Routes that admit the app list `native` in `x-clients`, and POST /donor/refresh, the push-device routes, POST /donor/me/company-touch, and POST /donor/me/recurring/checkout admit nothing else. The app may record referral and company-code link visits, keeping the returned token in place of the browser's cookie. Giving requires a verified donor session. Native recurring checkout uses its dedicated operation; partner applications admit both browser and native clients. Every staff route is browser-only.\n- **Partner portal** users are separate from donors (P-5). They sign in by calling POST /donor/partner/sign-in and opening the emailed `/partner/accept#token=\u2026` link, whose token POST /donor/partner/accept-invite exchanges for a 12-hour session: an HttpOnly cookie for a browser (`__Host-dad_partner_session` over HTTPS, otherwise `dad_partner_session`), or a bearer token for a native request, sent like the donor app's.\n- Staff routes are browser-only and never accept bearer tokens. The back office runs on its own host (`DONOR_STAFF_ORIGIN`): staff mutations require that exact `Origin`, and donor and public mutations require the public one, so neither site can act on the other.\n\n## Rate limits\nMutations are rate limited per client address and class (`x-rate-limit`): auth 10/min, visitor 60/min, account 30/min, analytics 120/min, staff 60/min, with bursts up to the same size. Exceeding one answers 429 with `Retry-After`. Reads are not rate limited by the API.\n\n## Conventions\n- Errors are always `application/json` `{\"detail\": \"\u2026\"}` with the status below; the detail is safe to display. A 503 for a feature the deployment has not configured adds a stable `code` and should not be retried. Unknown routes and malformed record IDs answer 404, wrong methods 405 with `Allow`.\n- Request bodies are one JSON object with exactly the documented fields (unknown fields, trailing data, NUL characters, and `null` for a defaulted field are 422), at most 256 KiB unless stated (larger is 413).\n- Money is integer USD cents in fields ending `_minor`; the API shows the same numbers on every client.\n- Timestamps are RFC 3339 strings, UTC, possibly with fractional seconds (`2026-10-06T14:03:00Z`, `\u2026+00:00` in gift records). Dates are `YYYY-MM-DD`.\n- Lists page by `offset`, 50 rows per page; a response's `next_offset` (or `next_<list>_offset`) is the next page's offset, or null on the last page.\n- Commands that reach the payment processor, and operations that declare the `Idempotency-Key` header, require it; retry with the same key after a timeout or 503.\n- Every response is `Cache-Control: no-store` except published content.\n"
  },
  "servers": [
   {
@@ -39,6 +39,26 @@
   {
    "name": "Wallet",
    "description": "Referral code passes for Apple and Google Wallet. Web and app."
+  },
+  {
+   "name": "Events",
+   "description": "Giving events: listing, reservation, check-in, and calendar files. Web and app."
+  },
+  {
+   "name": "Initiatives",
+   "description": "Funded initiatives and their published spend. Web and app."
+  },
+  {
+   "name": "Badges",
+   "description": "The donor badge wall (web and app) and staff badge grants (web only)."
+  },
+  {
+   "name": "Partner",
+   "description": "Partner portal sign-in, users, applications, and employer matching. Web and app."
+  },
+  {
+   "name": "Network",
+   "description": "The donor's referral network. Web and app."
   },
   {
    "name": "Recurring",
@@ -672,7 +692,7 @@
             "occurred_at": {
              "type": "string",
              "format": "date-time",
-             "description": "Client event time (RFC 3339). Rejected if missing or implausibly in the future."
+             "description": "Client event time (RFC 3339). Rejected if missing, implausibly in the future, or more than 30 days old."
             },
             "properties": {
              "type": "object",
@@ -3880,15 +3900,14 @@
       }
      },
      {
-      "name": "referrals_offset",
+      "name": "referrals_cursor",
       "in": "query",
       "required": false,
       "schema": {
-       "type": "integer",
-       "format": "int64",
-       "minimum": 0,
-       "default": 0
-      }
+       "type": "string",
+       "maxLength": 600
+      },
+      "description": "The previous page's next_referrals_cursor; omit for the first page."
      }
     ],
     "responses": {
@@ -7569,28 +7588,36 @@
         "type": "object",
         "properties": {
          "organization": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 200
          },
          "website": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 500
          },
          "type": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 80
          },
          "contact_name": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 100
          },
          "title": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 100
          },
          "work_email": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 320
          },
          "phone": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 40
          },
          "workforce_size": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 0
          }
         },
         "required": [
@@ -8180,13 +8207,17 @@
              },
              "role": {
               "type": "string"
+             },
+             "accepted": {
+              "type": "boolean"
              }
             },
             "required": [
              "id",
              "email",
              "name",
-             "role"
+             "role",
+             "accepted"
             ],
             "additionalProperties": false
            }
@@ -8517,7 +8548,97 @@
     }
    }
   },
-  "/donor/partner/users/{userID}/remove": {
+  "/donor/partner/users/{user_id}/reinvite": {
+   "post": {
+    "operationId": "partnerReinviteUser",
+    "summary": "Resend a partner portal invitation",
+    "tags": [
+     "Partner"
+    ],
+    "security": [
+     {
+      "partnerCookieAuth": []
+     },
+     {
+      "partnerBearerAuth": []
+     }
+    ],
+    "x-rate-limit": "account",
+    "x-clients": [
+     "browser",
+     "native"
+    ],
+    "parameters": [
+     {
+      "name": "user_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "invited": {
+           "type": "boolean",
+           "const": true
+          }
+         },
+         "required": [
+          "invited"
+         ],
+         "additionalProperties": false
+        }
+       }
+      }
+     },
+     "401": {
+      "$ref": "#/components/responses/Unauthorized"
+     },
+     "403": {
+      "$ref": "#/components/responses/Forbidden"
+     },
+     "404": {
+      "$ref": "#/components/responses/NotFound"
+     },
+     "409": {
+      "$ref": "#/components/responses/Conflict"
+     },
+     "422": {
+      "$ref": "#/components/responses/Unprocessable"
+     },
+     "429": {
+      "$ref": "#/components/responses/TooManyRequests"
+     },
+     "503": {
+      "$ref": "#/components/responses/Unavailable"
+     }
+    },
+    "description": "Admin only. For a user who has not accepted their invitation yet: ends the old link and emails a fresh single-use link that expires after 7 days. Not found once the user has accepted or was removed. Limited to one resend a minute and five an hour per user (429)."
+   }
+  },
+  "/donor/partner/users/{user_id}/remove": {
    "post": {
     "operationId": "partnerRemoveUser",
     "summary": "Remove a partner portal user",
@@ -8539,7 +8660,7 @@
     ],
     "parameters": [
      {
-      "name": "userID",
+      "name": "user_id",
       "in": "path",
       "required": true,
       "schema": {
@@ -8794,7 +8915,7 @@
     ]
    }
   },
-  "/donor/staff/partners/{appID}/approve": {
+  "/donor/staff/partners/{app_id}/approve": {
    "post": {
     "operationId": "staffPartnerApprove",
     "summary": "Approve a partner application",
@@ -8812,7 +8933,7 @@
     ],
     "parameters": [
      {
-      "name": "appID",
+      "name": "app_id",
       "in": "path",
       "required": true,
       "schema": {
@@ -8879,7 +9000,7 @@
     "description": "Refused with 409 when the applicant's work email already has a donor or staff login, or signs in to another partner organization (one email, one role)."
    }
   },
-  "/donor/staff/partners/{appID}/reject": {
+  "/donor/staff/partners/{app_id}/reject": {
    "post": {
     "operationId": "staffPartnerReject",
     "summary": "Reject a partner application",
@@ -8897,7 +9018,7 @@
     ],
     "parameters": [
      {
-      "name": "appID",
+      "name": "app_id",
       "in": "path",
       "required": true,
       "schema": {
@@ -8970,7 +9091,7 @@
     }
    }
   },
-  "/donor/staff/partners/{partnerID}/link": {
+  "/donor/staff/partners/{partner_id}/link": {
    "post": {
     "operationId": "staffPartnerLink",
     "summary": "Link an initiative to a partner",
@@ -8988,7 +9109,7 @@
     ],
     "parameters": [
      {
-      "name": "partnerID",
+      "name": "partner_id",
       "in": "path",
       "required": true,
       "schema": {
@@ -9066,7 +9187,7 @@
     }
    }
   },
-  "/donor/staff/partners/{partnerID}/match": {
+  "/donor/staff/partners/{partner_id}/match": {
    "post": {
     "operationId": "staffPartnerMatch",
     "summary": "Set a partner's match terms",
@@ -9084,7 +9205,7 @@
     ],
     "parameters": [
      {
-      "name": "partnerID",
+      "name": "partner_id",
       "in": "path",
       "required": true,
       "schema": {
@@ -9101,14 +9222,17 @@
         "type": "object",
         "properties": {
          "match_rate_bp": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 0
          },
          "match_cap_minor": {
           "type": "integer",
-          "format": "int64"
+          "format": "int64",
+          "minimum": 0
          },
          "workforce_size": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 0
          }
         },
         "required": [
@@ -9558,7 +9682,8 @@
         "type": "object",
         "properties": {
          "workforce_size": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 0
          }
         },
         "required": [
@@ -9684,7 +9809,7 @@
     "description": "Replaces the organization's name and description (\u00a77.2). Partner administrators only; viewers get 403. Both are trimmed; the name must be 1 to 200 characters and the description at most 4000."
    }
   },
-  "/donor/staff/partners/{partnerID}/match-status": {
+  "/donor/staff/partners/{partner_id}/match-status": {
    "get": {
     "operationId": "staffPartnerMatchStatus",
     "summary": "Match owed/paid for a year",
@@ -9698,7 +9823,7 @@
     ],
     "parameters": [
      {
-      "name": "partnerID",
+      "name": "partner_id",
       "in": "path",
       "required": true,
       "schema": {
@@ -9782,7 +9907,7 @@
     }
    }
   },
-  "/donor/staff/partners/{partnerID}/match-payment": {
+  "/donor/staff/partners/{partner_id}/match-payment": {
    "post": {
     "operationId": "staffPartnerMatchPayment",
     "summary": "Record an offline match payment",
@@ -9800,7 +9925,7 @@
     ],
     "parameters": [
      {
-      "name": "partnerID",
+      "name": "partner_id",
       "in": "path",
       "required": true,
       "schema": {
@@ -9809,14 +9934,7 @@
       }
      },
      {
-      "in": "header",
-      "name": "Idempotency-Key",
-      "required": false,
-      "schema": {
-       "type": "string",
-       "format": "uuid"
-      },
-      "description": "Version-4 UUID identifying this offline payment. Reuse the same key and payload after an uncertain result. Reusing it with another payload returns 409. Omission remains compatible with older clients but cannot deduplicate a retry."
+      "$ref": "#/components/parameters/IdempotencyKey"
      }
     ],
     "requestBody": {
@@ -9831,7 +9949,8 @@
          },
          "amount_minor": {
           "type": "integer",
-          "format": "int64"
+          "format": "int64",
+          "minimum": 1
          }
         },
         "required": [
@@ -9948,7 +10067,7 @@
     }
    }
   },
-  "/donor/staff/partners/{partnerID}": {
+  "/donor/staff/partners/{partner_id}": {
    "get": {
     "operationId": "staffPartnerDetail",
     "summary": "A partner's linked initiatives, match terms, and users",
@@ -9962,7 +10081,7 @@
     ],
     "parameters": [
      {
-      "name": "partnerID",
+      "name": "partner_id",
       "in": "path",
       "required": true,
       "schema": {
@@ -9997,7 +10116,7 @@
     }
    }
   },
-  "/donor/staff/partners/{partnerID}/users": {
+  "/donor/staff/partners/{partner_id}/users": {
    "post": {
     "operationId": "staffPartnerInviteUser",
     "summary": "Invite a user to a partner organization",
@@ -10013,7 +10132,7 @@
     "x-rate-limit": "staff",
     "parameters": [
      {
-      "name": "partnerID",
+      "name": "partner_id",
       "in": "path",
       "required": true,
       "schema": {
@@ -10101,7 +10220,7 @@
     ]
    }
   },
-  "/donor/staff/partners/{partnerID}/logo": {
+  "/donor/staff/partners/{partner_id}/logo": {
    "get": {
     "operationId": "staffPartnerLogo",
     "summary": "Read a partner organization's logo",
@@ -10140,7 +10259,7 @@
     },
     "parameters": [
      {
-      "name": "partnerID",
+      "name": "partner_id",
       "in": "path",
       "required": true,
       "schema": {
@@ -10229,7 +10348,7 @@
     "description": "Staff with partnerships access set the logo while enrolling an approved partner. The partner's administrators can replace it from the portal. Audited.",
     "parameters": [
      {
-      "name": "partnerID",
+      "name": "partner_id",
       "in": "path",
       "required": true,
       "schema": {
@@ -10240,7 +10359,86 @@
     ]
    }
   },
-  "/donor/staff/partners/{partnerID}/users/{userID}/remove": {
+  "/donor/staff/partners/{partner_id}/users/{user_id}/reinvite": {
+   "post": {
+    "operationId": "staffPartnerReinviteUser",
+    "summary": "Resend a partner user invitation",
+    "tags": [
+     "Staff"
+    ],
+    "security": [
+     {
+      "staffCookieAuth": []
+     }
+    ],
+    "x-rate-limit": "staff",
+    "parameters": [
+     {
+      "name": "partner_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid"
+      }
+     },
+     {
+      "name": "user_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "invited": {
+           "type": "boolean",
+           "const": true
+          }
+         },
+         "required": [
+          "invited"
+         ],
+         "additionalProperties": false
+        }
+       }
+      }
+     },
+     "401": {
+      "$ref": "#/components/responses/Unauthorized"
+     },
+     "403": {
+      "$ref": "#/components/responses/Forbidden"
+     },
+     "404": {
+      "$ref": "#/components/responses/NotFound"
+     },
+     "409": {
+      "$ref": "#/components/responses/Conflict"
+     },
+     "429": {
+      "$ref": "#/components/responses/TooManyRequests"
+     },
+     "503": {
+      "$ref": "#/components/responses/Unavailable"
+     }
+    },
+    "x-clients": [
+     "browser"
+    ],
+    "description": "For a user who has not accepted their invitation yet: ends the old link and emails a fresh single-use link that expires after 7 days. Not found once the user has accepted or was removed. Limited to one resend a minute and five an hour per user (429). Audited."
+   }
+  },
+  "/donor/staff/partners/{partner_id}/users/{user_id}/remove": {
    "post": {
     "operationId": "staffPartnerRemoveUser",
     "summary": "Remove a partner user and end their sessions",
@@ -10255,7 +10453,7 @@
     "x-rate-limit": "staff",
     "parameters": [
      {
-      "name": "partnerID",
+      "name": "partner_id",
       "in": "path",
       "required": true,
       "schema": {
@@ -10264,7 +10462,7 @@
       }
      },
      {
-      "name": "userID",
+      "name": "user_id",
       "in": "path",
       "required": true,
       "schema": {
@@ -11280,28 +11478,36 @@
           "type": "object",
           "properties": {
            "organization": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 200
            },
            "website": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 500
            },
            "type": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 80
            },
            "contact_name": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 100
            },
            "title": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 100
            },
            "work_email": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 320
            },
            "phone": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 40
            },
            "workforce_size": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": 0
            }
           },
           "required": [
@@ -11372,7 +11578,7 @@
     "operationId": "applicationStatus",
     "summary": "Read the status of the application named by a private receipt",
     "tags": [
-     "Partners"
+     "Partner"
     ],
     "security": [
      {
@@ -11575,7 +11781,7 @@
   "/donor/staff/donors/{donor_id}/recognition/reset": {
    "post": {
     "operationId": "postDonorStaffDonorsDonorIdRecognitionReset",
-    "summary": "/donor/staff/donors/{donor_id}/recognition/reset",
+    "summary": "Replay recognition from recorded facts",
     "tags": [
      "Staff donors"
     ],
@@ -11669,7 +11875,7 @@
   "/donor/staff/content/rules": {
    "get": {
     "operationId": "getDonorStaffContentRules",
-    "summary": "/donor/staff/content/rules",
+    "summary": "Read recognition rules",
     "tags": [
      "Content"
     ],
@@ -11702,7 +11908,7 @@
    },
    "post": {
     "operationId": "postDonorStaffContentRules",
-    "summary": "/donor/staff/content/rules",
+    "summary": "Replace recognition rules",
     "description": "Replaces badge earning thresholds, minimum ranking populations, PNG/JPEG artwork, and the milestone ladder. Every catalog badge must be supplied. The JSON body may be up to 10 MiB to hold the complete artwork batch. Wording changes use /donor/staff/content/wording.",
     "tags": [
      "Content"
@@ -11774,7 +11980,7 @@
   "/donor/signup": {
    "post": {
     "operationId": "postDonorSignup",
-    "summary": "/donor/signup",
+    "summary": "Start account creation",
     "description": "Starts account creation by emailing a verification link; no session is issued here. Answers 200 `{\"sent\":true}` whether or not the address already has an account, so it never reveals which. 503 `EMAIL_UNCONFIGURED` when the deployment has no email. The link (`/account/claim#token=\u2026`) is single-use and expires after 15 minutes; the app should handle it as a universal/app link and call POST /donor/claim, which takes the optional `device_name` and `platform` that label the resulting session. The response does not reveal whether an email belongs to a disabled donor, staff or partner; unavailable identities receive the same sent:true response without creating a donor account.",
     "tags": [
      "Account"
@@ -11794,16 +12000,20 @@
         "additionalProperties": false,
         "properties": {
          "name": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 150
          },
          "email": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 320
          },
          "zip": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 10
          },
          "city": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 80
          }
         },
         "required": [
@@ -11851,7 +12061,7 @@
   "/donor/password/sign-in": {
    "post": {
     "operationId": "postDonorPasswordSignIn",
-    "summary": "/donor/password/sign-in",
+    "summary": "Sign in with a password",
     "description": "Signs in with an email and password. 401 covers a wrong password, an unknown email, an unclaimed account and a disabled account alike, so none reveals whether an account exists. A browser request receives an HttpOnly cookie; a native request (`X-DAD-Client: native`, no Origin, no cookies) receives NativeSession and may describe its device so the donor can recognize the session later.",
     "tags": [
      "Account"
@@ -11871,7 +12081,8 @@
         "additionalProperties": false,
         "properties": {
          "email": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 320
          },
          "password": {
           "type": "string",
@@ -11930,8 +12141,8 @@
   "/donor/me/password": {
    "post": {
     "operationId": "postDonorMePassword",
-    "summary": "/donor/me/password",
-    "description": "Sets or changes the signed-in donor's password. `current_password` is required unless the session proved its password within the last 15 minutes; leave it empty when setting a first password right after signing in by email link. 401 means the session is missing, expired or revoked: sign in again. 422 with `code` `CURRENT_PASSWORD_INCORRECT` means the session is fine but `current_password` was missing or wrong: keep the donor signed in and let them retry (attempts are rate limited). Contract versions before 2.4 answered 401 with the same `detail` (\"The email or password is incorrect\"); a client that must still talk to such a server should treat that 401 on this route as a wrong current password when the access token is otherwise valid.",
+    "summary": "Set or change the password",
+    "description": "Sets or changes the signed-in donor's password. `current_password` is required unless the session proved its password within the last 15 minutes; leave it empty when setting a first password right after signing in by email link. A successful change signs out the donor's other sessions and keeps the calling one. 401 means the session is missing, expired or revoked: sign in again. 422 with `code` `CURRENT_PASSWORD_INCORRECT` means the session is fine but `current_password` was missing or wrong: keep the donor signed in and let them retry (attempts are rate limited). Contract versions before 2.4 answered 401 with the same `detail` (\"The email or password is incorrect\"); a client that must still talk to such a server should treat that 401 on this route as a wrong current password when the access token is otherwise valid.",
     "tags": [
      "Donor"
     ],
@@ -12113,6 +12324,563 @@
       "$ref": "#/components/responses/Unavailable"
      }
     }
+   }
+  },
+  "/donor/staff/insights": {
+   "get": {
+    "operationId": "staffInsights",
+    "summary": "Dashboard layouts and their review state",
+    "tags": [
+     "Content"
+    ],
+    "security": [
+     {
+      "staffCookieAuth": []
+     }
+    ],
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/Cursor"
+     },
+     {
+      "name": "state",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "enum": [
+        "draft",
+        "pending",
+        "live",
+        "retired",
+        "rejected"
+       ]
+      },
+      "description": "List only specs in this state."
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/InsightSpecPage"
+        }
+       }
+      }
+     },
+     "401": {
+      "$ref": "#/components/responses/Unauthorized"
+     },
+     "403": {
+      "$ref": "#/components/responses/Forbidden"
+     },
+     "422": {
+      "$ref": "#/components/responses/Unprocessable"
+     },
+     "503": {
+      "$ref": "#/components/responses/Unavailable"
+     }
+    },
+    "description": "Newest first. Needs the `content.publish` permission. Works whether or not DONOR_INSIGHTS_ENABLED is set."
+   },
+   "post": {
+    "operationId": "createInsight",
+    "summary": "Save a new draft layout",
+    "tags": [
+     "Content"
+    ],
+    "security": [
+     {
+      "staffCookieAuth": []
+     }
+    ],
+    "x-rate-limit": "staff",
+    "x-clients": [
+     "browser"
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/InsightSpecInput"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/InsightSpec"
+        }
+       }
+      }
+     },
+     "401": {
+      "$ref": "#/components/responses/Unauthorized"
+     },
+     "403": {
+      "$ref": "#/components/responses/Forbidden"
+     },
+     "415": {
+      "$ref": "#/components/responses/UnsupportedMediaType"
+     },
+     "422": {
+      "$ref": "#/components/responses/InvalidInsightSpec"
+     },
+     "429": {
+      "$ref": "#/components/responses/TooManyRequests"
+     },
+     "503": {
+      "$ref": "#/components/responses/Unavailable"
+     }
+    },
+    "description": "The caller becomes the author. Needs the `content.publish` permission."
+   }
+  },
+  "/donor/staff/insights/{spec_id}": {
+   "get": {
+    "operationId": "staffInsight",
+    "summary": "A dashboard layout with its content",
+    "tags": [
+     "Content"
+    ],
+    "security": [
+     {
+      "staffCookieAuth": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "spec_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid"
+      },
+      "description": "A malformed ID is 404, like an unknown one."
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/InsightSpec"
+        }
+       }
+      }
+     },
+     "401": {
+      "$ref": "#/components/responses/Unauthorized"
+     },
+     "403": {
+      "$ref": "#/components/responses/Forbidden"
+     },
+     "404": {
+      "$ref": "#/components/responses/NotFound"
+     },
+     "503": {
+      "$ref": "#/components/responses/Unavailable"
+     }
+    },
+    "description": "Needs the `content.publish` permission."
+   },
+   "post": {
+    "operationId": "updateInsight",
+    "summary": "Replace a draft layout's content",
+    "tags": [
+     "Content"
+    ],
+    "security": [
+     {
+      "staffCookieAuth": []
+     }
+    ],
+    "x-rate-limit": "staff",
+    "x-clients": [
+     "browser"
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/InsightSpecInput"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/InsightSpec"
+        }
+       }
+      }
+     },
+     "401": {
+      "$ref": "#/components/responses/Unauthorized"
+     },
+     "403": {
+      "$ref": "#/components/responses/Forbidden"
+     },
+     "404": {
+      "$ref": "#/components/responses/NotFound"
+     },
+     "409": {
+      "$ref": "#/components/responses/Conflict"
+     },
+     "415": {
+      "$ref": "#/components/responses/UnsupportedMediaType"
+     },
+     "422": {
+      "$ref": "#/components/responses/InvalidInsightSpec"
+     },
+     "429": {
+      "$ref": "#/components/responses/TooManyRequests"
+     },
+     "503": {
+      "$ref": "#/components/responses/Unavailable"
+     }
+    },
+    "description": "Only the draft's author. 403 for anyone else, 409 unless the spec is a draft. Needs the `content.publish` permission.",
+    "parameters": [
+     {
+      "name": "spec_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid"
+      },
+      "description": "A malformed ID is 404, like an unknown one."
+     }
+    ]
+   }
+  },
+  "/donor/staff/insights/{spec_id}/submit": {
+   "post": {
+    "operationId": "submitInsight",
+    "summary": "Submit a draft for approval",
+    "tags": [
+     "Content"
+    ],
+    "security": [
+     {
+      "staffCookieAuth": []
+     }
+    ],
+    "x-rate-limit": "staff",
+    "x-clients": [
+     "browser"
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/InsightSpec"
+        }
+       }
+      }
+     },
+     "401": {
+      "$ref": "#/components/responses/Unauthorized"
+     },
+     "403": {
+      "$ref": "#/components/responses/Forbidden"
+     },
+     "404": {
+      "$ref": "#/components/responses/NotFound"
+     },
+     "409": {
+      "$ref": "#/components/responses/Conflict"
+     },
+     "415": {
+      "$ref": "#/components/responses/UnsupportedMediaType"
+     },
+     "422": {
+      "$ref": "#/components/responses/InvalidInsightSpec"
+     },
+     "429": {
+      "$ref": "#/components/responses/TooManyRequests"
+     },
+     "503": {
+      "$ref": "#/components/responses/Unavailable"
+     }
+    },
+    "description": "Only the draft's author; validated again. 409 unless the spec is a draft. Needs the `content.publish` permission.",
+    "parameters": [
+     {
+      "name": "spec_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid"
+      },
+      "description": "A malformed ID is 404, like an unknown one."
+     }
+    ]
+   }
+  },
+  "/donor/staff/insights/{spec_id}/approve": {
+   "post": {
+    "operationId": "approveInsight",
+    "summary": "Approve a pending layout",
+    "tags": [
+     "Content"
+    ],
+    "security": [
+     {
+      "staffCookieAuth": []
+     }
+    ],
+    "x-rate-limit": "staff",
+    "x-clients": [
+     "browser"
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/InsightSpec"
+        }
+       }
+      }
+     },
+     "401": {
+      "$ref": "#/components/responses/Unauthorized"
+     },
+     "403": {
+      "$ref": "#/components/responses/Forbidden"
+     },
+     "404": {
+      "$ref": "#/components/responses/NotFound"
+     },
+     "409": {
+      "$ref": "#/components/responses/Conflict"
+     },
+     "415": {
+      "$ref": "#/components/responses/UnsupportedMediaType"
+     },
+     "422": {
+      "$ref": "#/components/responses/InvalidInsightSpec"
+     },
+     "429": {
+      "$ref": "#/components/responses/TooManyRequests"
+     },
+     "503": {
+      "$ref": "#/components/responses/Unavailable"
+     }
+    },
+    "description": "Makes it live and retires the live one in the same step. 403 when the caller authored the spec (two-person rule), 409 unless the spec is pending. Needs the `content.publish` permission.",
+    "parameters": [
+     {
+      "name": "spec_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid"
+      },
+      "description": "A malformed ID is 404, like an unknown one."
+     }
+    ]
+   }
+  },
+  "/donor/staff/insights/{spec_id}/retire": {
+   "post": {
+    "operationId": "retireInsight",
+    "summary": "Retire the live layout",
+    "tags": [
+     "Content"
+    ],
+    "security": [
+     {
+      "staffCookieAuth": []
+     }
+    ],
+    "x-rate-limit": "staff",
+    "x-clients": [
+     "browser"
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/InsightSpec"
+        }
+       }
+      }
+     },
+     "401": {
+      "$ref": "#/components/responses/Unauthorized"
+     },
+     "403": {
+      "$ref": "#/components/responses/Forbidden"
+     },
+     "404": {
+      "$ref": "#/components/responses/NotFound"
+     },
+     "409": {
+      "$ref": "#/components/responses/Conflict"
+     },
+     "415": {
+      "$ref": "#/components/responses/UnsupportedMediaType"
+     },
+     "429": {
+      "$ref": "#/components/responses/TooManyRequests"
+     },
+     "503": {
+      "$ref": "#/components/responses/Unavailable"
+     }
+    },
+    "description": "409 unless the spec is live. Any publisher may, so a bad layout is never held up. Needs the `content.publish` permission.",
+    "parameters": [
+     {
+      "name": "spec_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid"
+      },
+      "description": "A malformed ID is 404, like an unknown one."
+     }
+    ]
+   }
+  },
+  "/donor/staff/insights/{spec_id}/reject": {
+   "post": {
+    "operationId": "rejectInsight",
+    "summary": "Reject a pending layout",
+    "tags": [
+     "Content"
+    ],
+    "security": [
+     {
+      "staffCookieAuth": []
+     }
+    ],
+    "x-rate-limit": "staff",
+    "x-clients": [
+     "browser"
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/InsightSpecRejection"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/InsightSpec"
+        }
+       }
+      }
+     },
+     "401": {
+      "$ref": "#/components/responses/Unauthorized"
+     },
+     "403": {
+      "$ref": "#/components/responses/Forbidden"
+     },
+     "404": {
+      "$ref": "#/components/responses/NotFound"
+     },
+     "409": {
+      "$ref": "#/components/responses/Conflict"
+     },
+     "415": {
+      "$ref": "#/components/responses/UnsupportedMediaType"
+     },
+     "422": {
+      "$ref": "#/components/responses/Unprocessable"
+     },
+     "429": {
+      "$ref": "#/components/responses/TooManyRequests"
+     },
+     "503": {
+      "$ref": "#/components/responses/Unavailable"
+     }
+    },
+    "description": "403 when the caller authored the spec (two-person rule), 409 unless the spec is pending. Needs the `content.publish` permission.",
+    "parameters": [
+     {
+      "name": "spec_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid"
+      },
+      "description": "A malformed ID is 404, like an unknown one."
+     }
+    ]
    }
   }
  },
@@ -12356,6 +13124,16 @@
      "application/json": {
       "schema": {
        "$ref": "#/components/schemas/Problem"
+      }
+     }
+    }
+   },
+   "InvalidInsightSpec": {
+    "description": "The spec is not one JSON array that passes the UI catalog rules; `errors` lists every reason, with its path and code. Other invalid fields answer the plain 422.",
+    "content": {
+     "application/json": {
+      "schema": {
+       "$ref": "#/components/schemas/InsightSpecProblem"
       }
      }
     }
@@ -12633,6 +13411,17 @@
        },
        "impact": {
         "$ref": "#/components/schemas/ImpactSummary"
+       },
+       "insights": {
+        "anyOf": [
+         {
+          "$ref": "#/components/schemas/InsightsPanel"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "description": "The approved dashboard layout. Absent, or null, when DONOR_INSIGHTS_ENABLED is off, no layout is live, or the live one no longer passes validation; clients treat both as no panel."
        }
       },
       "required": [
@@ -13913,14 +14702,12 @@
       "description": "Pass as gifts_offset for the next page of gifts.",
       "minimum": 0
      },
-     "next_referrals_offset": {
+     "next_referrals_cursor": {
       "type": [
-       "integer",
+       "string",
        "null"
       ],
-      "format": "int64",
-      "description": "Pass as referrals_offset for the next page of referred donors.",
-      "minimum": 0
+      "description": "Pass as referrals_cursor for the next page of referred donors."
      },
      "public_name": {
       "type": [
@@ -13973,7 +14760,7 @@
      "gifts",
      "id",
      "next_gifts_offset",
-     "next_referrals_offset",
+     "next_referrals_cursor",
      "public_name",
      "referred",
      "referrer",
@@ -14628,7 +15415,8 @@
      },
      "committed_minor": {
       "type": "integer",
-      "format": "int64"
+      "format": "int64",
+      "minimum": 0
      },
      "partner_signup_id": {
       "type": "string"
@@ -14706,7 +15494,8 @@
      },
      "amount_minor": {
       "type": "integer",
-      "format": "int64"
+      "format": "int64",
+      "minimum": 0
      },
      "verification_note": {
       "type": "string",
@@ -17087,6 +17876,338 @@
       "description": "Native request."
      }
     ]
+   },
+   "UiSpecNode": {
+    "type": "object",
+    "description": "One block of a dashboard layout. `type` names a catalog component; the other fields are that component's props. The schema is open because a node of a type this catalog version does not know is valid and renders nothing. Validate with contracts/mobile/ui-catalog.json.",
+    "properties": {
+     "type": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "type"
+    ],
+    "additionalProperties": true
+   },
+   "UiSpec": {
+    "type": "array",
+    "description": "An ordered dashboard layout. Its binds are JSON Pointers into the DonorDashboard response that carries it.",
+    "items": {
+     "$ref": "#/components/schemas/UiSpecNode"
+    },
+    "minItems": 1
+   },
+   "InsightsPanel": {
+    "type": "object",
+    "description": "The approved dashboard layout. Render it against the DonorDashboard response it arrived in.",
+    "properties": {
+     "catalog_version": {
+      "type": "integer",
+      "description": "The UI catalog version the layout was written for."
+     },
+     "spec_id": {
+      "type": "string",
+      "format": "uuid"
+     },
+     "spec": {
+      "$ref": "#/components/schemas/UiSpec"
+     }
+    },
+    "required": [
+     "catalog_version",
+     "spec_id",
+     "spec"
+    ],
+    "additionalProperties": false
+   },
+   "InsightSpecSummary": {
+    "type": "object",
+    "description": "A dashboard layout and where it stands in review, without its content.",
+    "properties": {
+     "id": {
+      "type": "string",
+      "format": "uuid"
+     },
+     "state": {
+      "type": "string",
+      "enum": [
+       "draft",
+       "pending",
+       "live",
+       "retired",
+       "rejected"
+      ]
+     },
+     "catalog_version": {
+      "type": "integer",
+      "description": "The UI catalog version the spec was checked against when it was saved."
+     },
+     "author_id": {
+      "type": "string",
+      "format": "uuid"
+     },
+     "author_name": {
+      "type": "string"
+     },
+     "approver_id": {
+      "type": [
+       "string",
+       "null"
+      ],
+      "format": "uuid",
+      "description": "Who approved or rejected the spec. Never the author."
+     },
+     "approver_name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "reject_reason": {
+      "type": [
+       "string",
+       "null"
+      ],
+      "description": "Set only for a rejected spec."
+     },
+     "created_at": {
+      "type": "string",
+      "format": "date-time"
+     },
+     "updated_at": {
+      "type": "string",
+      "format": "date-time"
+     },
+     "submitted_at": {
+      "type": [
+       "string",
+       "null"
+      ],
+      "format": "date-time"
+     },
+     "decided_at": {
+      "type": [
+       "string",
+       "null"
+      ],
+      "format": "date-time"
+     },
+     "retired_at": {
+      "type": [
+       "string",
+       "null"
+      ],
+      "format": "date-time"
+     }
+    },
+    "required": [
+     "id",
+     "state",
+     "catalog_version",
+     "author_id",
+     "author_name",
+     "approver_id",
+     "approver_name",
+     "reject_reason",
+     "created_at",
+     "updated_at",
+     "submitted_at",
+     "decided_at",
+     "retired_at"
+    ],
+    "additionalProperties": false
+   },
+   "InsightSpec": {
+    "type": "object",
+    "description": "A dashboard layout with its content.",
+    "properties": {
+     "id": {
+      "type": "string",
+      "format": "uuid"
+     },
+     "state": {
+      "type": "string",
+      "enum": [
+       "draft",
+       "pending",
+       "live",
+       "retired",
+       "rejected"
+      ]
+     },
+     "catalog_version": {
+      "type": "integer",
+      "description": "The UI catalog version the spec was checked against when it was saved."
+     },
+     "author_id": {
+      "type": "string",
+      "format": "uuid"
+     },
+     "author_name": {
+      "type": "string"
+     },
+     "approver_id": {
+      "type": [
+       "string",
+       "null"
+      ],
+      "format": "uuid",
+      "description": "Who approved or rejected the spec. Never the author."
+     },
+     "approver_name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "reject_reason": {
+      "type": [
+       "string",
+       "null"
+      ],
+      "description": "Set only for a rejected spec."
+     },
+     "created_at": {
+      "type": "string",
+      "format": "date-time"
+     },
+     "updated_at": {
+      "type": "string",
+      "format": "date-time"
+     },
+     "submitted_at": {
+      "type": [
+       "string",
+       "null"
+      ],
+      "format": "date-time"
+     },
+     "decided_at": {
+      "type": [
+       "string",
+       "null"
+      ],
+      "format": "date-time"
+     },
+     "retired_at": {
+      "type": [
+       "string",
+       "null"
+      ],
+      "format": "date-time"
+     },
+     "spec": {
+      "$ref": "#/components/schemas/UiSpec"
+     }
+    },
+    "required": [
+     "id",
+     "state",
+     "catalog_version",
+     "author_id",
+     "author_name",
+     "approver_id",
+     "approver_name",
+     "reject_reason",
+     "created_at",
+     "updated_at",
+     "submitted_at",
+     "decided_at",
+     "retired_at",
+     "spec"
+    ],
+    "additionalProperties": false
+   },
+   "InsightSpecPage": {
+    "type": "object",
+    "properties": {
+     "specs": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/InsightSpecSummary"
+      }
+     },
+     "next_cursor": {
+      "type": [
+       "string",
+       "null"
+      ],
+      "description": "Cursor of the next page, or null on the last page."
+     }
+    },
+    "required": [
+     "specs",
+     "next_cursor"
+    ],
+    "additionalProperties": false
+   },
+   "InsightSpecInput": {
+    "type": "object",
+    "properties": {
+     "spec": {
+      "$ref": "#/components/schemas/UiSpec"
+     }
+    },
+    "required": [
+     "spec"
+    ],
+    "additionalProperties": false
+   },
+   "InsightSpecRejection": {
+    "type": "object",
+    "properties": {
+     "reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+     }
+    },
+    "required": [
+     "reason"
+    ],
+    "additionalProperties": false
+   },
+   "InsightSpecError": {
+    "type": "object",
+    "properties": {
+     "path": {
+      "type": "string",
+      "description": "JSON Pointer into the spec; empty for the spec as a whole."
+     },
+     "code": {
+      "type": "string",
+      "description": "A stable reason, as in contracts/mobile/ui-catalog-vectors.json."
+     },
+     "message": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "path",
+     "code",
+     "message"
+    ],
+    "additionalProperties": false
+   },
+   "InsightSpecProblem": {
+    "type": "object",
+    "properties": {
+     "detail": {
+      "type": "string"
+     },
+     "errors": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/InsightSpecError"
+      }
+     }
+    },
+    "required": [
+     "detail",
+     "errors"
+    ],
+    "additionalProperties": false
    }
   }
  }

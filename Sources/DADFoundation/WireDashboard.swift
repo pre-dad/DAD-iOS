@@ -136,6 +136,14 @@ public struct WireDashboard: DashboardService {
         record.refunds.map { RefundEntry(id: $0.id, amountMinor: Int(clamping: $0.amount_minor), status: $0.status, observedAt: $0.observed_at) }
     }
 
+    /// The layout is untrusted JSON bound into the response it came with; whatever goes wrong, the dashboard still
+    /// loads without a panel.
+    private static func insights(_ value: Components.Schemas.DonorDashboard.Case2Payload) -> InsightsPanel? {
+        guard let raw = value.insights, let dashboard = try? UIValue(encoding: value),
+              let panel = try? UIValue(encoding: raw) else { return nil }
+        return UIInsights.panel(raw: panel, dashboard: dashboard)
+    }
+
     private static func map(_ value: Components.Schemas.DonorDashboard.Case2Payload) -> DonorDashboard {
         let streak = value.streak.map { streak in
             StreakCard(
@@ -160,6 +168,7 @@ public struct WireDashboard: DashboardService {
             },
             referrals: value.referrals.map {
                 ReferralTotals(link: Int(clamping: $0.link), irl: Int(clamping: $0.irl), totalMinor: Int(clamping: $0.total_minor))
-            })
+            },
+            insights: insights(value))
     }
 }
